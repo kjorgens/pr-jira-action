@@ -44,11 +44,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: pr jira
-        uses: ./ghActionScripts/pr-jira-integration # Uses an action in the root directory
+        uses: ./dist/index.js
         id: prJira
         with:
-          jira-endpoint: 'https://vivintsolar.atlassian.net/rest/api/2/'
-          repo-owner: 'Vivintsolar'
+          jira-endpoint: 'https://yourjira.atlassian.net/rest/api/2/'
+          repo-owner: 'kjorgens'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           jira-user: ${{ secrets.JIRA_USER }}
           jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
