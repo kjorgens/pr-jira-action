@@ -1,0 +1,25 @@
+name: 'PR Jira'
+description: 'Integrate Jira and Github pull requests'
+inputs:
+  jira-endpoint:
+    description: url for jira
+    required: true
+  repo-owner:
+    description: repo owner name
+    required: true
+  repo-token:
+    description: github token
+    required: true
+  jira-user:
+    description: Jira user name
+    required: true
+  jira-api-token:
+    description: Jira api token
+    required: true
+  jira-required-status:
+    description: Context for Jira Validation github required status
+    required: false
+
+runs:
+  using: 'node12'
+  main: 'compiled/index.js'

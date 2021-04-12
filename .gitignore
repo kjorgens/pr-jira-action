@@ -1,0 +1,18 @@
+.idea/
+coverage
+.vscode
+.DS_Store
+build
+/bin
+config/_props.json
+.vs/slnx.sqlite
+
+#npm and yarn
+node_modules/
+npm-debug.*
+package-lock.json
+yarn-error.log
+
+# testing
+test/results/*.xml
+
