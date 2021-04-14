@@ -5,26 +5,40 @@ This action integrates Jira with Github pull requests.
 ## About
 
 GitHub Action to integrate Jira tickets with GitHub pull requests. Checks pull request for valid Jira tickets. If a ticket does not exist or is done or closed, a comment is created on the pull request.
-![Screenshot](../../.github/invalid_ticket.png)
+![Screenshot](./img/invalid_ticket.png)
 Listens for pull request comments that contain a Jira ticket. Adds link and Jira ticket description to the pull request body.
-![Screenshot](../../.github/pr_body_jira.png)
+![Screenshot](./img/pr_body_jira.png)
 Sets GitHub status to indicate specified Jira tickets are valid.
-![Screenshot](../../.github/jira_valid_status.png)
+![Screenshot](./img/jira_valid_status.png)
 If more than one Jira ticket is specified, a reminder comment is created.
-![Screenshot](../../.github/two_tickets_remind.png)
+![Screenshot](./img/two_tickets_remind.png)
 
 ---
 
-- [Usage](#usage)
-  - [Jira endpoint](#jira-endpoint)
-  - [Jira User](#jira-user)
-  - [Jira Api Token](#jira-token)
-  - [Jira Status Context](#jira-status-context)
-  - [GitHub Repo Owner](#gh-repo-owner)
-  - [Github Token](#gh-token)
-- [Limitation](#limitation)
-
 ## Usage
+**1. Jira endpoint.**
+
+    https://<yourjira>.atlassian.net/rest/api/2/
+**2. Jira User.**
+
+    Jira API user name
+
+**3. Jira API Token**
+
+    Jira API token
+
+**4. Jira Status Context**
+  
+    GitHub pull request status context for Jira.
+    default: Jira Validation
+    
+**5. GitHub Repo Owner**
+
+    GitHub organization name    
+
+**6. Github Token**
+
+    GitHub api token 
 
 ```yaml
 name: PR Jira integration
