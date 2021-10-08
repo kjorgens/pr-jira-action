@@ -1,6 +1,6 @@
 {
   "name": "pr-jira-integration",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "This action pulls the jira description from the pr and places the jira description in the PR body.",
   "main": "pr-jira.js",
   "scripts": {
@@ -8,9 +8,9 @@
     "compile": "ncc build pr-jira.js -o dist"
   },
   "dependencies": {
-    "@actions/core": "^1.2.6",
-    "@actions/github": "^4.0.0",
-    "@vercel/ncc": "^0.28.3",
+    "@actions/core": "^1.6.0",
+    "@actions/github": "^5.0.0",
+    "@vercel/ncc": "^0.31.1",
     "lodash.uniqwith": "^4.5.0",
     "lodash.isequal": "^4.5.0",
     "superagent": "^6.1.0"
