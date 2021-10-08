@@ -1,13 +1,22 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
+const { createOAuthUserAuth } = require("@octokit/auth-oauth-user");
 const jiraRegex = new RegExp(/((?!([A-Z0-9a-z]{1,10})-?$)[A-Z]{1}[A-Z0-9]+-\d+)/g);
 const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
 const superAgent = require('superagent');
 const unique = require('lodash.uniqwith');
 const isEqual = require('lodash.isequal');
+const octokit = github.getOctokit({
+  authStrategy: createOAuthUserAuth,
+  auth: {
+    clientId: core.getInput("OPENID_CLIENT_ID"),
+    clientSecret: core.getInput("OPENID_CLIENT_SECRET"),
+    code: "code123",
+  },
+});
 
 async function gitPrComments(repo, PR) {
-  const comments = await github.issues.listComments({
+  const comments = await octokit.issues.listComments({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     issue_number: PR,
@@ -62,7 +71,7 @@ async function getAllTickets(repo, prNumber, prTitle, prBody, prHeadBranch) {
 }
 
 function newPrComment(repo, number, body) {
-  return github.issues.createComment({
+  return octokit.issues.createComment({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     issue_number: number,
@@ -181,7 +190,7 @@ function addJiraLabels(repo, issueNum, pr) {
 }
 
 function updatePRBody(repo, prNumber, newBody) {
-  return github.pulls.update({
+  return octokit.pulls.update({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     pull_number: prNumber,
@@ -191,7 +200,7 @@ function updatePRBody(repo, prNumber, newBody) {
 
 async function getMasterRef(repo, ref) {
   try {
-    const results = await github.git.getRef({
+    const results = await octokit.git.getRef({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       ref: ref,
@@ -206,7 +215,7 @@ async function getMasterRef(repo, ref) {
 async function newGitHubStatusBranch(repo, branch, status) {
   try {
     const refObject = await getMasterRef(repo, `heads/${branch}`);
-    const results = await github.repos.createCommitStatus({
+    const results = await octokit.repos.createCommitStatus({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       sha: refObject.object.sha,

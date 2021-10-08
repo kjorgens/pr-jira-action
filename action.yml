@@ -19,6 +19,12 @@ inputs:
   jira-required-status:
     description: Context for Jira Validation github required status
     required: false
+  OpenIdClientSecret:
+    description: OpenId client secret
+    required: true
+  OpenIdClientID:
+    description: OpenId client ID
+    required: true
 
 runs:
   using: 'node12'

@@ -1490,6 +1490,590 @@ exports.checkBypass = checkBypass;
 
 /***/ }),
 
+/***/ 4344:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+var universalUserAgent = __nccwpck_require__(5030);
+var request = __nccwpck_require__(6234);
+var oauthMethods = __nccwpck_require__(8445);
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+
+    if (enumerableOnly) {
+      symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+    }
+
+    keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i] != null ? arguments[i] : {};
+
+    if (i % 2) {
+      ownKeys(Object(source), true).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      });
+    } else if (Object.getOwnPropertyDescriptors) {
+      Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+    } else {
+      ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+  }
+
+  return target;
+}
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+function _objectWithoutPropertiesLoose(source, excluded) {
+  if (source == null) return {};
+  var target = {};
+  var sourceKeys = Object.keys(source);
+  var key, i;
+
+  for (i = 0; i < sourceKeys.length; i++) {
+    key = sourceKeys[i];
+    if (excluded.indexOf(key) >= 0) continue;
+    target[key] = source[key];
+  }
+
+  return target;
+}
+
+function _objectWithoutProperties(source, excluded) {
+  if (source == null) return {};
+
+  var target = _objectWithoutPropertiesLoose(source, excluded);
+
+  var key, i;
+
+  if (Object.getOwnPropertySymbols) {
+    var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
+
+    for (i = 0; i < sourceSymbolKeys.length; i++) {
+      key = sourceSymbolKeys[i];
+      if (excluded.indexOf(key) >= 0) continue;
+      if (!Object.prototype.propertyIsEnumerable.call(source, key)) continue;
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+async function getOAuthAccessToken(state, options) {
+  const cachedAuthentication = getCachedAuthentication(state, options.auth);
+  if (cachedAuthentication) return cachedAuthentication; // Step 1: Request device and user codes
+  // https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-1-app-requests-the-device-and-user-verification-codes-from-github
+
+  const {
+    data: verification
+  } = await oauthMethods.createDeviceCode({
+    clientType: state.clientType,
+    clientId: state.clientId,
+    request: options.request || state.request,
+    // @ts-expect-error the extra code to make TS happy is not worth it
+    scopes: options.auth.scopes || state.scopes
+  }); // Step 2: User must enter the user code on https://github.com/login/device
+  // See https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-2-prompt-the-user-to-enter-the-user-code-in-a-browser
+
+  await state.onVerification(verification); // Step 3: Exchange device code for access token
+  // See https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-3-app-polls-github-to-check-if-the-user-authorized-the-device
+
+  const authentication = await waitForAccessToken(options.request || state.request, state.clientId, state.clientType, verification);
+  state.authentication = authentication;
+  return authentication;
+}
+
+function getCachedAuthentication(state, auth) {
+  if (auth.refresh === true) return false;
+  if (!state.authentication) return false;
+
+  if (state.clientType === "github-app") {
+    return state.authentication;
+  }
+
+  const authentication = state.authentication;
+  const newScope = ("scopes" in auth && auth.scopes || state.scopes).join(" ");
+  const currentScope = authentication.scopes.join(" ");
+  return newScope === currentScope ? authentication : false;
+}
+
+async function wait(seconds) {
+  await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+}
+
+async function waitForAccessToken(request, clientId, clientType, verification) {
+  try {
+    const options = {
+      clientId,
+      request,
+      code: verification.device_code
+    }; // WHY TYPESCRIPT WHY ARE YOU DOING THIS TO ME
+
+    const {
+      authentication
+    } = clientType === "oauth-app" ? await oauthMethods.exchangeDeviceCode(_objectSpread2(_objectSpread2({}, options), {}, {
+      clientType: "oauth-app"
+    })) : await oauthMethods.exchangeDeviceCode(_objectSpread2(_objectSpread2({}, options), {}, {
+      clientType: "github-app"
+    }));
+    return _objectSpread2({
+      type: "token",
+      tokenType: "oauth"
+    }, authentication);
+  } catch (error) {
+    // istanbul ignore if
+    if (!error.response) throw error;
+    const errorType = error.response.data.error;
+
+    if (errorType === "authorization_pending") {
+      await wait(verification.interval);
+      return waitForAccessToken(request, clientId, clientType, verification);
+    }
+
+    if (errorType === "slow_down") {
+      await wait(verification.interval + 5);
+      return waitForAccessToken(request, clientId, clientType, verification);
+    }
+
+    throw error;
+  }
+}
+
+async function auth(state, authOptions) {
+  return getOAuthAccessToken(state, {
+    auth: authOptions
+  });
+}
+
+async function hook(state, request, route, parameters) {
+  let endpoint = request.endpoint.merge(route, parameters); // Do not intercept request to retrieve codes or token
+
+  if (/\/login\/(oauth\/access_token|device\/code)$/.test(endpoint.url)) {
+    return request(endpoint);
+  }
+
+  const {
+    token
+  } = await getOAuthAccessToken(state, {
+    request,
+    auth: {
+      type: "oauth"
+    }
+  });
+  endpoint.headers.authorization = `token ${token}`;
+  return request(endpoint);
+}
+
+const VERSION = "3.1.2";
+
+function createOAuthDeviceAuth(options) {
+  const requestWithDefaults = options.request || request.request.defaults({
+    headers: {
+      "user-agent": `octokit-auth-oauth-device.js/${VERSION} ${universalUserAgent.getUserAgent()}`
+    }
+  });
+
+  const {
+    request: request$1 = requestWithDefaults
+  } = options,
+        otherOptions = _objectWithoutProperties(options, ["request"]);
+
+  const state = options.clientType === "github-app" ? _objectSpread2(_objectSpread2({}, otherOptions), {}, {
+    clientType: "github-app",
+    request: request$1
+  }) : _objectSpread2(_objectSpread2({}, otherOptions), {}, {
+    clientType: "oauth-app",
+    request: request$1,
+    scopes: options.scopes || []
+  });
+
+  if (!options.clientId) {
+    throw new Error('[@octokit/auth-oauth-device] "clientId" option must be set (https://github.com/octokit/auth-oauth-device.js#usage)');
+  }
+
+  if (!options.onVerification) {
+    throw new Error('[@octokit/auth-oauth-device] "onVerification" option must be a function (https://github.com/octokit/auth-oauth-device.js#usage)');
+  } // @ts-ignore too much for tsc / ts-jest ¯\_(ツ)_/¯
+
+
+  return Object.assign(auth.bind(null, state), {
+    hook: hook.bind(null, state)
+  });
+}
+
+exports.createOAuthDeviceAuth = createOAuthDeviceAuth;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 1591:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var universalUserAgent = __nccwpck_require__(5030);
+var request = __nccwpck_require__(6234);
+var authOauthDevice = __nccwpck_require__(4344);
+var oauthMethods = __nccwpck_require__(8445);
+var btoa = _interopDefault(__nccwpck_require__(2358));
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+
+    if (enumerableOnly) {
+      symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+    }
+
+    keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i] != null ? arguments[i] : {};
+
+    if (i % 2) {
+      ownKeys(Object(source), true).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      });
+    } else if (Object.getOwnPropertyDescriptors) {
+      Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+    } else {
+      ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+  }
+
+  return target;
+}
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+function _objectWithoutPropertiesLoose(source, excluded) {
+  if (source == null) return {};
+  var target = {};
+  var sourceKeys = Object.keys(source);
+  var key, i;
+
+  for (i = 0; i < sourceKeys.length; i++) {
+    key = sourceKeys[i];
+    if (excluded.indexOf(key) >= 0) continue;
+    target[key] = source[key];
+  }
+
+  return target;
+}
+
+function _objectWithoutProperties(source, excluded) {
+  if (source == null) return {};
+
+  var target = _objectWithoutPropertiesLoose(source, excluded);
+
+  var key, i;
+
+  if (Object.getOwnPropertySymbols) {
+    var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
+
+    for (i = 0; i < sourceSymbolKeys.length; i++) {
+      key = sourceSymbolKeys[i];
+      if (excluded.indexOf(key) >= 0) continue;
+      if (!Object.prototype.propertyIsEnumerable.call(source, key)) continue;
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+const VERSION = "1.3.0";
+
+async function getAuthentication(state) {
+  // handle code exchange form OAuth Web Flow
+  if ("code" in state.strategyOptions) {
+    const {
+      authentication
+    } = await oauthMethods.exchangeWebFlowCode(_objectSpread2(_objectSpread2({
+      clientId: state.clientId,
+      clientSecret: state.clientSecret,
+      clientType: state.clientType
+    }, state.strategyOptions), {}, {
+      request: state.request
+    }));
+    return _objectSpread2({
+      type: "token",
+      tokenType: "oauth"
+    }, authentication);
+  } // handle OAuth device flow
+
+
+  if ("onVerification" in state.strategyOptions) {
+    const deviceAuth = authOauthDevice.createOAuthDeviceAuth(_objectSpread2(_objectSpread2({
+      clientType: state.clientType,
+      clientId: state.clientId
+    }, state.strategyOptions), {}, {
+      request: state.request
+    }));
+    const authentication = await deviceAuth({
+      type: "oauth"
+    });
+    return _objectSpread2({
+      clientSecret: state.clientSecret
+    }, authentication);
+  } // use existing authentication
+
+
+  if ("token" in state.strategyOptions) {
+    return _objectSpread2({
+      type: "token",
+      tokenType: "oauth",
+      clientId: state.clientId,
+      clientSecret: state.clientSecret,
+      clientType: state.clientType
+    }, state.strategyOptions);
+  }
+
+  throw new Error("[@octokit/auth-oauth-user] Invalid strategy options");
+}
+
+async function auth(state, options = {}) {
+  if (!state.authentication) {
+    // This is what TS makes us do ¯\_(ツ)_/¯
+    state.authentication = state.clientType === "oauth-app" ? await getAuthentication(state) : await getAuthentication(state);
+  }
+
+  if (state.authentication.invalid) {
+    throw new Error("[@octokit/auth-oauth-user] Token is invalid");
+  }
+
+  const currentAuthentication = state.authentication; // (auto) refresh for user-to-server tokens
+
+  if ("expiresAt" in currentAuthentication) {
+    if (options.type === "refresh" || new Date(currentAuthentication.expiresAt) < new Date()) {
+      const {
+        authentication
+      } = await oauthMethods.refreshToken({
+        clientType: "github-app",
+        clientId: state.clientId,
+        clientSecret: state.clientSecret,
+        refreshToken: currentAuthentication.refreshToken,
+        request: state.request
+      });
+      state.authentication = _objectSpread2({
+        tokenType: "oauth",
+        type: "token"
+      }, authentication);
+    }
+  } // throw error for invalid refresh call
+
+
+  if (options.type === "refresh") {
+    if (state.clientType === "oauth-app") {
+      throw new Error("[@octokit/auth-oauth-user] OAuth Apps do not support expiring tokens");
+    }
+
+    if (!currentAuthentication.hasOwnProperty("expiresAt")) {
+      throw new Error("[@octokit/auth-oauth-user] Refresh token missing");
+    }
+  } // check or reset token
+
+
+  if (options.type === "check" || options.type === "reset") {
+    const method = options.type === "check" ? oauthMethods.checkToken : oauthMethods.resetToken;
+
+    try {
+      const {
+        authentication
+      } = await method({
+        // @ts-expect-error making TS happy would require unnecessary code so no
+        clientType: state.clientType,
+        clientId: state.clientId,
+        clientSecret: state.clientSecret,
+        token: state.authentication.token,
+        request: state.request
+      });
+      state.authentication = _objectSpread2({
+        tokenType: "oauth",
+        type: "token"
+      }, authentication);
+      return state.authentication;
+    } catch (error) {
+      // istanbul ignore else
+      if (error.status === 404) {
+        error.message = "[@octokit/auth-oauth-user] Token is invalid"; // @ts-expect-error TBD
+
+        state.authentication.invalid = true;
+      }
+
+      throw error;
+    }
+  } // invalidate
+
+
+  if (options.type === "delete" || options.type === "deleteAuthorization") {
+    const method = options.type === "delete" ? oauthMethods.deleteToken : oauthMethods.deleteAuthorization;
+
+    try {
+      await method({
+        // @ts-expect-error making TS happy would require unnecessary code so no
+        clientType: state.clientType,
+        clientId: state.clientId,
+        clientSecret: state.clientSecret,
+        token: state.authentication.token,
+        request: state.request
+      });
+    } catch (error) {
+      // istanbul ignore if
+      if (error.status !== 404) throw error;
+    }
+
+    state.authentication.invalid = true;
+    return state.authentication;
+  }
+
+  return state.authentication;
+}
+
+/**
+ * The following endpoints require an OAuth App to authenticate using its client_id and client_secret.
+ *
+ * - [`POST /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#check-a-token) - Check a token
+ * - [`PATCH /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#reset-a-token) - Reset a token
+ * - [`POST /applications/{client_id}/token/scoped`](https://docs.github.com/en/rest/reference/apps#create-a-scoped-access-token) - Create a scoped access token
+ * - [`DELETE /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#delete-an-app-token) - Delete an app token
+ * - [`DELETE /applications/{client_id}/grant`](https://docs.github.com/en/rest/reference/apps#delete-an-app-authorization) - Delete an app authorization
+ *
+ * deprecated:
+ *
+ * - [`GET /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#check-an-authorization) - Check an authorization
+ * - [`POST /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#reset-an-authorization) - Reset an authorization
+ * - [`DELETE /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#revoke-an-authorization-for-an-application) - Revoke an authorization for an application
+ * - [`DELETE /applications/{client_id}/grants/{access_token}`](https://docs.github.com/en/rest/reference/apps#revoke-a-grant-for-an-application) - Revoke a grant for an application
+ */
+const ROUTES_REQUIRING_BASIC_AUTH = /\/applications\/[^/]+\/(token|grant)s?/;
+function requiresBasicAuth(url) {
+  return url && ROUTES_REQUIRING_BASIC_AUTH.test(url);
+}
+
+async function hook(state, request, route, parameters = {}) {
+  const endpoint = request.endpoint.merge(route, parameters); // Do not intercept OAuth Web/Device flow request
+
+  if (/\/login\/(oauth\/access_token|device\/code)$/.test(endpoint.url)) {
+    return request(endpoint);
+  }
+
+  if (requiresBasicAuth(endpoint.url)) {
+    const credentials = btoa(`${state.clientId}:${state.clientSecret}`);
+    endpoint.headers.authorization = `basic ${credentials}`;
+    return request(endpoint);
+  } // TS makes us do this ¯\_(ツ)_/¯
+
+
+  const {
+    token
+  } = state.clientType === "oauth-app" ? await auth(_objectSpread2(_objectSpread2({}, state), {}, {
+    request
+  })) : await auth(_objectSpread2(_objectSpread2({}, state), {}, {
+    request
+  }));
+  endpoint.headers.authorization = "token " + token;
+  return request(endpoint);
+}
+
+const _excluded = ["clientId", "clientSecret", "clientType", "request"];
+function createOAuthUserAuth(_ref) {
+  let {
+    clientId,
+    clientSecret,
+    clientType = "oauth-app",
+    request: request$1 = request.request.defaults({
+      headers: {
+        "user-agent": `octokit-auth-oauth-app.js/${VERSION} ${universalUserAgent.getUserAgent()}`
+      }
+    })
+  } = _ref,
+      strategyOptions = _objectWithoutProperties(_ref, _excluded);
+
+  const state = Object.assign({
+    clientType,
+    clientId,
+    clientSecret,
+    strategyOptions,
+    request: request$1
+  }); // @ts-expect-error not worth the extra code needed to appease TS
+
+  return Object.assign(auth.bind(null, state), {
+    // @ts-expect-error not worth the extra code needed to appease TS
+    hook: hook.bind(null, state)
+  });
+}
+createOAuthUserAuth.VERSION = VERSION;
+
+exports.createOAuthUserAuth = createOAuthUserAuth;
+exports.requiresBasicAuth = requiresBasicAuth;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
 /***/ 334:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -2406,6 +2990,470 @@ const request = withDefaults(endpoint.endpoint, {
 });
 
 exports.request = request;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 1017:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function oauthAuthorizationUrl(options) {
+  const clientType = options.clientType || "oauth-app";
+  const baseUrl = options.baseUrl || "https://github.com";
+  const result = {
+    clientType,
+    allowSignup: options.allowSignup === false ? false : true,
+    clientId: options.clientId,
+    login: options.login || null,
+    redirectUrl: options.redirectUrl || null,
+    state: options.state || Math.random().toString(36).substr(2),
+    url: ""
+  };
+
+  if (clientType === "oauth-app") {
+    const scopes = "scopes" in options ? options.scopes : [];
+    result.scopes = typeof scopes === "string" ? scopes.split(/[,\s]+/).filter(Boolean) : scopes;
+  }
+
+  result.url = urlBuilderAuthorize(`${baseUrl}/login/oauth/authorize`, result);
+  return result;
+}
+
+function urlBuilderAuthorize(base, options) {
+  const map = {
+    allowSignup: "allow_signup",
+    clientId: "client_id",
+    login: "login",
+    redirectUrl: "redirect_uri",
+    scopes: "scope",
+    state: "state"
+  };
+  let url = base;
+  Object.keys(map) // Filter out keys that are null and remove the url key
+  .filter(k => options[k] !== null) // Filter out empty scopes array
+  .filter(k => {
+    if (k !== "scopes") return true;
+    if (options.clientType === "github-app") return false;
+    return !Array.isArray(options[k]) || options[k].length > 0;
+  }) // Map Array with the proper URL parameter names and change the value to a string using template strings
+  // @ts-ignore
+  .map(key => [map[key], `${options[key]}`]) // Finally, build the URL
+  .forEach(([key, value], index) => {
+    url += index === 0 ? `?` : "&";
+    url += `${key}=${encodeURIComponent(value)}`;
+  });
+  return url;
+}
+
+exports.oauthAuthorizationUrl = oauthAuthorizationUrl;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 8445:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var oauthAuthorizationUrl = __nccwpck_require__(1017);
+var request = __nccwpck_require__(6234);
+var requestError = __nccwpck_require__(537);
+var btoa = _interopDefault(__nccwpck_require__(2358));
+
+const VERSION = "1.2.5";
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+
+    if (enumerableOnly) {
+      symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+    }
+
+    keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i] != null ? arguments[i] : {};
+
+    if (i % 2) {
+      ownKeys(Object(source), true).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      });
+    } else if (Object.getOwnPropertyDescriptors) {
+      Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+    } else {
+      ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+  }
+
+  return target;
+}
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+function _objectWithoutPropertiesLoose(source, excluded) {
+  if (source == null) return {};
+  var target = {};
+  var sourceKeys = Object.keys(source);
+  var key, i;
+
+  for (i = 0; i < sourceKeys.length; i++) {
+    key = sourceKeys[i];
+    if (excluded.indexOf(key) >= 0) continue;
+    target[key] = source[key];
+  }
+
+  return target;
+}
+
+function _objectWithoutProperties(source, excluded) {
+  if (source == null) return {};
+
+  var target = _objectWithoutPropertiesLoose(source, excluded);
+
+  var key, i;
+
+  if (Object.getOwnPropertySymbols) {
+    var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
+
+    for (i = 0; i < sourceSymbolKeys.length; i++) {
+      key = sourceSymbolKeys[i];
+      if (excluded.indexOf(key) >= 0) continue;
+      if (!Object.prototype.propertyIsEnumerable.call(source, key)) continue;
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+function requestToOAuthBaseUrl(request) {
+  const endpointDefaults = request.endpoint.DEFAULTS;
+  return /^https:\/\/(api\.)?github\.com$/.test(endpointDefaults.baseUrl) ? "https://github.com" : endpointDefaults.baseUrl.replace("/api/v3", "");
+}
+async function oauthRequest(request, route, parameters) {
+  const withOAuthParameters = _objectSpread2({
+    baseUrl: requestToOAuthBaseUrl(request),
+    headers: {
+      accept: "application/json"
+    }
+  }, parameters);
+
+  const response = await request(route, withOAuthParameters);
+
+  if ("error" in response.data) {
+    const error = new requestError.RequestError(`${response.data.error_description} (${response.data.error}, ${response.data.error_uri})`, 400, {
+      request: request.endpoint.merge(route, withOAuthParameters),
+      headers: response.headers
+    }); // @ts-ignore add custom response property until https://github.com/octokit/request-error.js/issues/169 is resolved
+
+    error.response = response;
+    throw error;
+  }
+
+  return response;
+}
+
+const _excluded = ["request"];
+function getWebFlowAuthorizationUrl(_ref) {
+  let {
+    request: request$1 = request.request
+  } = _ref,
+      options = _objectWithoutProperties(_ref, _excluded);
+
+  const baseUrl = requestToOAuthBaseUrl(request$1); // @ts-expect-error TypeScript wants `clientType` to be set explicitly ¯\_(ツ)_/¯
+
+  return oauthAuthorizationUrl.oauthAuthorizationUrl(_objectSpread2(_objectSpread2({}, options), {}, {
+    baseUrl
+  }));
+}
+
+async function exchangeWebFlowCode(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const response = await oauthRequest(request$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    client_secret: options.clientSecret,
+    code: options.code,
+    redirect_uri: options.redirectUrl,
+    state: options.state
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.access_token,
+    scopes: response.data.scope.split(/\s+/).filter(Boolean)
+  };
+
+  if (options.clientType === "github-app") {
+    if ("refresh_token" in response.data) {
+      const apiTimeInMs = new Date(response.headers.date).getTime();
+      authentication.refreshToken = response.data.refresh_token, authentication.expiresAt = toTimestamp(apiTimeInMs, response.data.expires_in), authentication.refreshTokenExpiresAt = toTimestamp(apiTimeInMs, response.data.refresh_token_expires_in);
+    }
+
+    delete authentication.scopes;
+  }
+
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+function toTimestamp(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+async function createDeviceCode(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const parameters = {
+    client_id: options.clientId
+  };
+
+  if ("scopes" in options && Array.isArray(options.scopes)) {
+    parameters.scope = options.scopes.join(" ");
+  }
+
+  return oauthRequest(request$1, "POST /login/device/code", parameters);
+}
+
+async function exchangeDeviceCode(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const response = await oauthRequest(request$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    device_code: options.code,
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    token: response.data.access_token,
+    scopes: response.data.scope.split(/\s+/).filter(Boolean)
+  };
+
+  if ("clientSecret" in options) {
+    authentication.clientSecret = options.clientSecret;
+  }
+
+  if (options.clientType === "github-app") {
+    if ("refresh_token" in response.data) {
+      const apiTimeInMs = new Date(response.headers.date).getTime();
+      authentication.refreshToken = response.data.refresh_token, authentication.expiresAt = toTimestamp$1(apiTimeInMs, response.data.expires_in), authentication.refreshTokenExpiresAt = toTimestamp$1(apiTimeInMs, response.data.refresh_token_expires_in);
+    }
+
+    delete authentication.scopes;
+  }
+
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+function toTimestamp$1(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+async function checkToken(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const response = await request$1("POST /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${btoa(`${options.clientId}:${options.clientSecret}`)}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: options.token,
+    scopes: response.data.scopes
+  };
+  if (response.data.expires_at) authentication.expiresAt = response.data.expires_at;
+
+  if (options.clientType === "github-app") {
+    delete authentication.scopes;
+  }
+
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+async function refreshToken(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const response = await oauthRequest(request$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    client_secret: options.clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: options.refreshToken
+  });
+  const apiTimeInMs = new Date(response.headers.date).getTime();
+  const authentication = {
+    clientType: "github-app",
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.access_token,
+    refreshToken: response.data.refresh_token,
+    expiresAt: toTimestamp$2(apiTimeInMs, response.data.expires_in),
+    refreshTokenExpiresAt: toTimestamp$2(apiTimeInMs, response.data.refresh_token_expires_in)
+  };
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+function toTimestamp$2(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+const _excluded$1 = ["request", "clientType", "clientId", "clientSecret", "token"];
+async function scopeToken(options) {
+  const {
+    request: request$1,
+    clientType,
+    clientId,
+    clientSecret,
+    token
+  } = options,
+        requestOptions = _objectWithoutProperties(options, _excluded$1);
+
+  const response = await (request$1 ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request)("POST /applications/{client_id}/token/scoped", _objectSpread2({
+    headers: {
+      authorization: `basic ${btoa(`${clientId}:${clientSecret}`)}`
+    },
+    client_id: clientId,
+    access_token: token
+  }, requestOptions));
+  const authentication = Object.assign({
+    clientType,
+    clientId,
+    clientSecret,
+    token: response.data.token
+  }, response.data.expires_at ? {
+    expiresAt: response.data.expires_at
+  } : {});
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+async function resetToken(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const auth = btoa(`${options.clientId}:${options.clientSecret}`);
+  const response = await request$1("PATCH /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.token,
+    scopes: response.data.scopes
+  };
+  if (response.data.expires_at) authentication.expiresAt = response.data.expires_at;
+
+  if (options.clientType === "github-app") {
+    delete authentication.scopes;
+  }
+
+  return _objectSpread2(_objectSpread2({}, response), {}, {
+    authentication
+  });
+}
+
+async function deleteToken(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const auth = btoa(`${options.clientId}:${options.clientSecret}`);
+  return request$1("DELETE /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+}
+
+async function deleteAuthorization(options) {
+  const request$1 = options.request ||
+  /* istanbul ignore next: we always pass a custom request in tests */
+  request.request;
+  const auth = btoa(`${options.clientId}:${options.clientSecret}`);
+  return request$1("DELETE /applications/{client_id}/grant", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+}
+
+exports.VERSION = VERSION;
+exports.checkToken = checkToken;
+exports.createDeviceCode = createDeviceCode;
+exports.deleteAuthorization = deleteAuthorization;
+exports.deleteToken = deleteToken;
+exports.exchangeDeviceCode = exchangeDeviceCode;
+exports.exchangeWebFlowCode = exchangeWebFlowCode;
+exports.getWebFlowAuthorizationUrl = getWebFlowAuthorizationUrl;
+exports.refreshToken = refreshToken;
+exports.resetToken = resetToken;
+exports.scopeToken = scopeToken;
 //# sourceMappingURL=index.js.map
 
 
@@ -4611,6 +5659,16 @@ function removeHook(state, name, method) {
   }
 
   state.registry[name].splice(index, 1);
+}
+
+
+/***/ }),
+
+/***/ 2358:
+/***/ ((module) => {
+
+module.exports = function btoa(str) {
+  return new Buffer(str).toString('base64')
 }
 
 
@@ -21811,12 +22869,20 @@ var __webpack_exports__ = {};
 (() => {
 const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
+const { createOAuthUserAuth } = __nccwpck_require__(1591);
 const jiraRegex = new RegExp(/((?!([A-Z0-9a-z]{1,10})-?$)[A-Z]{1}[A-Z0-9]+-\d+)/g);
 const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
 const superAgent = __nccwpck_require__(1524);
 const unique = __nccwpck_require__(3566);
 const isEqual = __nccwpck_require__(8309);
-const octokit = github.getOctokit(process.env.GH_TOKEN || core.getInput('repo-token'));
+const octokit = github.getOctokit({
+  authStrategy: createOAuthUserAuth,
+  auth: {
+    clientId: core.getInput("OPENID_CLIENT_ID"),
+    clientSecret: core.getInput("OPENID_CLIENT_SECRET"),
+    code: "code123",
+  },
+});
 
 async function gitPrComments(repo, PR) {
   const comments = await octokit.issues.listComments({
@@ -22126,7 +23192,7 @@ async function evalJiraInfoInPR(repo, prNumber, prBody, prTitle, headRef) {
       prNumber = github.context.payload.issue.number;
       prBody = github.context.payload.issue.body;
       prTitle = github.context.payload.issue.title;
-      pr = await octokit.pulls.get({
+      pr = await github.pulls.get({
         owner: core.getInput('repo-owner'),
         repo: repoName,
         pull_number: prNumber,
