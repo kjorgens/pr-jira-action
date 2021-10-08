@@ -5,10 +5,9 @@ const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
 const superAgent = require('superagent');
 const unique = require('lodash.uniqwith');
 const isEqual = require('lodash.isequal');
-const octokit = github.getOctokit(process.env.GH_TOKEN || core.getInput('repo-token'));
 
 async function gitPrComments(repo, PR) {
-  const comments = await octokit.issues.listComments({
+  const comments = await github.issues.listComments({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     issue_number: PR,
@@ -63,7 +62,7 @@ async function getAllTickets(repo, prNumber, prTitle, prBody, prHeadBranch) {
 }
 
 function newPrComment(repo, number, body) {
-  return octokit.issues.createComment({
+  return github.issues.createComment({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     issue_number: number,
@@ -182,7 +181,7 @@ function addJiraLabels(repo, issueNum, pr) {
 }
 
 function updatePRBody(repo, prNumber, newBody) {
-  return octokit.pulls.update({
+  return github.pulls.update({
     owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
     repo: repo,
     pull_number: prNumber,
@@ -192,7 +191,7 @@ function updatePRBody(repo, prNumber, newBody) {
 
 async function getMasterRef(repo, ref) {
   try {
-    const results = await octokit.git.getRef({
+    const results = await github.git.getRef({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       ref: ref,
@@ -207,7 +206,7 @@ async function getMasterRef(repo, ref) {
 async function newGitHubStatusBranch(repo, branch, status) {
   try {
     const refObject = await getMasterRef(repo, `heads/${branch}`);
-    const results = await octokit.repos.createCommitStatus({
+    const results = await github.repos.createCommitStatus({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       sha: refObject.object.sha,
@@ -315,7 +314,7 @@ async function evalJiraInfoInPR(repo, prNumber, prBody, prTitle, headRef) {
       prNumber = github.context.payload.issue.number;
       prBody = github.context.payload.issue.body;
       prTitle = github.context.payload.issue.title;
-      pr = await octokit.pulls.get({
+      pr = await github.pulls.get({
         owner: core.getInput('repo-owner'),
         repo: repoName,
         pull_number: prNumber,
