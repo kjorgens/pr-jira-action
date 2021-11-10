@@ -1,0 +1,11 @@
+name: Testing workflow run
+on:
+  workflow_call:
+
+jobs:
+  testing-automerge:
+    runs-on: ubuntu-latest
+    name: Validate Dev PR
+    steps:
+      - name: print a message
+        run: "running pr-jira-action/sharedwf.yml"
