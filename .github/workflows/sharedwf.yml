@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Validate Dev PR
 
-
     steps:
       - name: print a message
-        run: echo "running pr-jira-action/sharedwf.yml"
+        run: echo "running pr-jira-action/sharedwf.yml with parameters name:${{ inputs.username }} and pr:${{ inputs.prnum }}"
