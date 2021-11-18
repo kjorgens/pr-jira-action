@@ -15,30 +15,42 @@ If more than one Jira ticket is specified, a reminder comment is created.
 
 ---
 
-## Usage
-**1. Jira endpoint.**
+## Usage (inputs) [actions.yml](action.yml)
+ _repo-owner:_
 
-    https://<yourjira>.atlassian.net/rest/api/2/
-**2. Jira User.**
+    GitHub organization name   
+ _github_token:_
 
-    Jira API user name
+    secrets.GITHUB_TOKEN or a GitHub personal access token.
+ _jira-required-status:_
 
-**3. Jira API Token**
-
-    Jira API token
-
-**4. Jira Status Context**
-  
     GitHub pull request status context for Jira.
     default: Jira Validation
+ _jira-host:_
+
+    https://<yourjira>.jira.com
+ _jira-user:_
+
+    Jira API user email
+ _jira-api-token:_
+
+    Jira API token
+ _ticket-search-branch:_
+
+    Search for tickets in PR branch name
+ _ticket-search-title:_
+
+    Search for tickets in PR title
+ _ticket-search-pr-body:_
+
+    Search for tickets in PR body
+ _ticket-search-comments:_
+
+    Search for tickets in PR comments
     
-**5. GitHub Repo Owner**
+ 
 
-    GitHub organization name    
 
-**6. Github Token**
-
-    GitHub api token 
 
 ```yaml
 name: PR Jira integration
@@ -57,14 +69,18 @@ jobs:
       # To use this repository's private action, you must check out the repository
       - name: Checkout
         uses: actions/checkout@v2
-      - name: pr jira
-        uses: ./dist/index.js
+      - name: pr jira validation
+        uses: kjorgens/pr-jira@main
         id: prJira
         with:
-          jira-endpoint: 'https://yourjira.atlassian.net/rest/api/2/'
-          repo-owner: 'kjorgens'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          jira-endpoint: https://<your jira org>.jira.com
+          repo-owner: orgname
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           jira-user: ${{ secrets.JIRA_USER }}
           jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
-          jira-required-status: 'Jira Validation'
+          jira-required-status: Jira Validation
+          ticket-search-branch: true
+          ticket-search-title: true
+          ticket-search-pr-body: false
+          ticket-search-comments: false
 ```

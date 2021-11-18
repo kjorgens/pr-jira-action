@@ -4,14 +4,8 @@ inputs:
   github_token:
     description: github access token
     required: true
-  jira-endpoint:
-    description: url for jira
-    required: true
   repo-owner:
     description: repo owner name
-    required: true
-  repo-token:
-    description: github token
     required: true
   jira-host:
     description: Your organiztion Jira host address
