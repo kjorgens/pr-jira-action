@@ -10,7 +10,7 @@ const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
 import unique from 'lodash.uniqwith';
 import isEqual from 'lodash.isequal';
 
-const octokit = getOctokit(process.env.GH_TOKEN || core.getInput('repo-token'));
+const octokit = getOctokit(process.env.GH_TOKEN || core.getInput('github_token'));
 
 let jiraClient = {};
 
@@ -80,7 +80,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
     owner: owner,
     repo: repo,
     headers: {
-      authorization: `token ${process.env.GH_TOKEN}`
+      authorization: `token ${core.getInput('github_token')}`
     }
   });
 
@@ -90,7 +90,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
     owner: owner,
     repo: repo,
     headers: {
-      authorization: `token ${process.env.GH_TOKEN}`
+      authorization: `token ${core.getInput('github_token')}`
     }
   });
 }
@@ -123,7 +123,7 @@ async function getAllTickets(owner, repo, prNumber) {
       owner: owner,
       repo: repo,
       headers: {
-        authorization: `token ${process.env.GH_TOKEN}`
+        authorization: `token ${core.getInput('github_token')}`
       }
     }
   );
@@ -135,7 +135,7 @@ async function getAllTickets(owner, repo, prNumber) {
       prNumber: prNumber,
       nodeCount: 100,
       headers: {
-        authorization: `token ${process.env.GH_TOKEN}`
+        authorization: `token ${core.getInput('github_token')}`
       }
     }
   );

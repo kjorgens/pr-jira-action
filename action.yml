@@ -1,6 +1,9 @@
 name: 'PR Jira'
 description: 'Integrate Jira and Github pull requests'
 inputs:
+  github_token:
+    description: github access token
+    required: true
   jira-endpoint:
     description: url for jira
     required: true
