@@ -70,7 +70,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: pr jira validation
-        uses: kjorgens/pr-jira@main
+        uses: kjorgens/pr-jira-action@main
         id: prJira
         with:
           jira-endpoint: https://<your jira org>.jira.com
