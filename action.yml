@@ -1,14 +1,14 @@
 name: 'PR Jira'
 description: 'Integrate Jira and Github pull requests'
 inputs:
-  jira-endpoint:
-    description: url for jira
+  github_token:
+    description: github access token
     required: true
   repo-owner:
     description: repo owner name
     required: true
-  repo-token:
-    description: github token
+  jira-host:
+    description: Your organiztion Jira host address
     required: true
   jira-user:
     description: Jira user name
@@ -16,11 +16,25 @@ inputs:
   jira-api-token:
     description: Jira api token
     required: true
+  valid-jira-project-ids:
+    description: valid project ids
+    required: false
   jira-required-status:
     description: Context for Jira Validation github required status
+    required: false
+  ticket-search-branch:
+    description: Search for Jira tickets in branch name
+    required: false
+  ticket-search-title:
+    description: Search for Jira tickets in PR title
+    required: false
+  ticket-search-pr-body:
+    description: Search for Jira tickets in pr body
+    required: false
+  ticket-search-comments:
+    description: Search for Jira tickets in comments
     required: false
 
 runs:
   using: 'node12'
   main: 'dist/index.js'
-

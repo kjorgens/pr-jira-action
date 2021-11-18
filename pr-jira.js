@@ -1,33 +1,111 @@
-const core = require('@actions/core');
-const github = require('@actions/github');
+import jpkg from 'jira.js';
+const { Version2Client } = jpkg;
+import * as core from '@actions/core';
+import actionGhPkg from '@actions/github';
+const { getOctokit } = actionGhPkg;
+import ghpkg from '@octokit/graphql';
+const { graphql } = ghpkg;
 const jiraRegex = new RegExp(/((?!([A-Z0-9a-z]{1,10})-?$)[A-Z]{1}[A-Z0-9]+-\d+)/g);
 const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
-const superAgent = require('superagent');
-const unique = require('lodash.uniqwith');
-const isEqual = require('lodash.isequal');
-const octokit = github.getOctokit(process.env.GH_TOKEN || core.getInput('repo-token'));
+import unique from 'lodash.uniqwith';
+import isEqual from 'lodash.isequal';
 
-async function gitPrComments(repo, PR) {
-  const comments = await octokit.issues.listComments({
-    owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
-    repo: repo,
-    issue_number: PR,
-  });
+const octokit = getOctokit(process.env.GH_TOKEN || core.getInput('github_token'));
 
-  var commentTickets = [];
-  if (comments.data && comments.data.length > 0) {
-    value = comments.data[comments.data.length - 1].body;
-    tickets = comments.data[comments.data.length - 1].body.toUpperCase().match(ticketPattern);
-    if (tickets) {
-      tickets.forEach(jiraTicket => {
-        if (comments.data[comments.data.length - 1].user.login !== 'github-actions[bot]') {
-          commentTickets.push(jiraTicket);
+let jiraClient = {};
+
+const allTicketsQuery = `query($repo: String!, $prNumber: Int!, $owner: String!) {
+  repository(owner: $owner, name: $repo) {
+    name
+    pullRequest(number: $prNumber){
+      headRef {
+        name
+      }
+      title
+      bodyText
+      headRef {
+        name
+      }
+    }   
+  }
+}`;
+
+const prCommentsQuery = `query($repo: String!, $prNumber: Int!, $owner: String!, $nodeCount: Int!) {
+  repository(owner: $owner, name: $repo) {
+    name
+    pullRequest(number: $prNumber){
+      comments(last: $nodeCount) {
+        edges {
+          node {
+            body
+            author {
+              login
+            }
+          }
         }
-      });
+      }   
+      headRef {
+        name
+      }
+    }   
+  }
+}`;
+
+const getPRIdQuery = `query($repo: String!, $prNumber: Int!, $owner: String!) {
+  repository(owner: $owner, name: $repo) {
+    name
+    pullRequest(number: $prNumber) {
+      id
     }
   }
+}`;
 
-  return commentTickets;
+const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
+  addComment(input:{subjectId: $prId, body: $commentBody}) {
+    commentEdge {
+      node {
+        createdAt
+        body
+      } 
+    }
+    subject {
+      id
+    }
+  }
+}`;
+
+async function createPrComment(owner, repo, prNum, commentBodyText) {
+  const prInfo = await graphql(getPRIdQuery, {
+    prNumber: prNum,
+    owner: owner,
+    repo: repo,
+    headers: {
+      authorization: `token ${core.getInput('github_token')}`
+    }
+  });
+
+  return await graphql(createCommentMutation, {
+    prId: prInfo.repository.pullRequest.id,
+    commentBody: commentBodyText,
+    owner: owner,
+    repo: repo,
+    headers: {
+      authorization: `token ${core.getInput('github_token')}`
+    }
+  });
+}
+
+function getPrTickets(nodes) {
+  const vals = nodes.map((node) => {
+    let tickets = node.node.body.toUpperCase().match(ticketPattern);
+    if (node.node.author.login !== 'github-actions' && tickets) {
+      return tickets.join(',');
+    }
+  })
+
+  return vals.filter((val) => {
+    return val;
+  })
 }
 
 function removeDuplicates(tickets) {
@@ -36,163 +114,114 @@ function removeDuplicates(tickets) {
   });
 }
 
-async function getAllTickets(repo, prNumber, prTitle, prBody, prHeadBranch) {
-  ticketsFound = [];
-  prTickets = prTitle.toUpperCase().match(ticketPattern);
-  bodyTickets = prBody.toUpperCase().match(ticketPattern);
-  branchTickets = prHeadBranch.toUpperCase().match(ticketPattern);
-  commentTickets = await gitPrComments(repo, prNumber, process.env.GITHUB_ORG || core.getInput('repo-owner'));
-  if (prTickets) {
-    console.log('ticket found in pr title');
-    ticketsFound = ticketsFound.concat(prTickets);
+async function getAllTickets(owner, repo, prNumber) {
+  let ticketsFound = [];
+
+  const prData = await graphql(
+    allTicketsQuery, {
+      prNumber: prNumber,
+      owner: owner,
+      repo: repo,
+      headers: {
+        authorization: `token ${core.getInput('github_token')}`
+      }
+    }
+  );
+
+  const prComments = await graphql(
+    prCommentsQuery, {
+      owner: owner,
+      repo: repo,
+      prNumber: prNumber,
+      nodeCount: 100,
+      headers: {
+        authorization: `token ${core.getInput('github_token')}`
+      }
+    }
+  );
+
+  if (process.env.SEARCH_TITLE ===  'true' || core.getInput('ticket-search-title')) {
+    let prTickets = prData.repository.pullRequest.title.toUpperCase().match(ticketPattern);
+    if (prTickets) {
+      console.log('ticket found in pr title');
+      ticketsFound = ticketsFound.concat(prTickets);
+    }
   }
-  if (bodyTickets) {
-    console.log('ticket found in pr body');
-    ticketsFound = ticketsFound.concat(bodyTickets);
+  if (process.env.SEARCH_BODY === 'true' || core.getInput('ticket-search-pr-body')) {
+    let bodyTickets = prData.repository.pullRequest.bodyText.toUpperCase().match(ticketPattern);
+    if (bodyTickets) {
+      console.log('ticket found in pr body');
+      ticketsFound = ticketsFound.concat(bodyTickets);
+    }
   }
-  if (branchTickets) {
-    console.log('ticket found in pr branch name');
-    ticketsFound = ticketsFound.concat(branchTickets);
+  if (process.env.SEARCH_BRANCH === 'true' || core.getInput('ticket-search-branch')) {
+    let branchTickets = prData.repository.pullRequest.headRef.name.toUpperCase().match(ticketPattern);
+    if (branchTickets) {
+      console.log('ticket found in pr branch name');
+      ticketsFound = ticketsFound.concat(branchTickets);
+    }
   }
-  if (commentTickets) {
-    console.log('ticket found in pr comment');
-    ticketsFound = ticketsFound.concat(commentTickets);
+  if (process.env.SEARCH_COMMENTS === 'true' || core.getInput('ticket-search-comments')) {
+    if (prComments.repository.pullRequest.comments) {
+      console.log('ticket found in pr comment');
+      let commentTickets = getPrTickets(prComments.repository.pullRequest.comments.edges);
+      ticketsFound = ticketsFound.concat(commentTickets);
+    }
   }
 
   return removeDuplicates(ticketsFound);
 }
 
-function newPrComment(repo, number, body) {
-  return octokit.issues.createComment({
-    owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
-    repo: repo,
-    issue_number: number,
-    body: body,
-  });
-}
+async function jiraValidationRequest(jiraIssue) {
+  return new Promise(async(resolve, reject) => {
+    var [projectId, ticket] = jiraIssue.key.split('-');
+    var qstring = {
+      jql: `project=${projectId} AND issue=${jiraIssue.key}`,
+    };
 
-function validateJiraRequest(jiraIssue) {
-  return new Promise((resolve, reject) => {
-    var [projectId, ticket] = jiraIssue.split('-');
-    var qstring = JSON.stringify({
-      jql: `project=${projectId} AND issue=${jiraIssue}`,
-    });
-
-    return superAgent
-      .post(process.env.JIRA_ENDPOINT || `${core.getInput('jira-endpoint')}search/`)
-      .auth(
-        process.env.JIRA_USER || core.getInput('jira-user'),
-        process.env.JIRA_API_TOKEN || core.getInput('jira-api-token'),
-      )
-      .set('Content-Type', 'application/json')
-      .send(qstring)
-      .end((err, res) => {
-        if (err || res.statusCode !== 200) {
-          reject(err);
-        } else {
-          ticket = res.body;
-          if (ticket.total === 0) {
-            reject(`jira issue ${jiraIssue} not found`);
-          } else if (ticket.issues[0].fields.status.name.indexOf('Closed') > -1) {
-            reject('Closed jira ticket: ' + jiraIssue + ' Create a new Jira ticket');
-            // } else if (ticket.issues[0].fields.status.name.indexOf('Deployed') > -1) {
-            //   reject('Jira ticket in Deployed state: ' + jiraIssue + ' Create a new Jira ticket');
-          } else if (ticket.issues[0].fields.status.name.indexOf('Done') > -1) {
-            reject('Jira ticket in Done state: ' + jiraIssue + ' Create a new Jira ticket');
-          } else {
-            resolve(ticket);
-          }
-        }
-      });
+    try {
+      const results = await jiraClient.issueSearch.searchForIssuesUsingJql(qstring);
+      ticket = results.issues;
+      if (ticket.length === 0) {
+        reject(`jira issue ${jiraIssue} not found`);
+      } else if (ticket[0].fields.status.name.indexOf('Closed') > -1) {
+        reject('Closed jira ticket: ' + jiraIssue.key + ' Create a new Jira ticket');
+        // } else if (ticket.issues[0].fields.status.name.indexOf('Deployed') > -1) {
+        //   reject('Jira ticket in Deployed state: ' + jiraIssue + ' Create a new Jira ticket');
+      } else if (ticket[0].fields.status.name.indexOf('Done') > -1) {
+        reject('Jira ticket in Done state: ' + jiraIssue.key + ' Create a new Jira ticket');
+      } else {
+        resolve(ticket[0]);
+      }
+    } catch(err) {
+      console.log(err.message);
+    }
   }).catch(err => {
     throw err;
   });
 }
 
-async function getJiraTicket(jiraProject, jiraIssue) {
-  return new Promise((resolve, reject) => {
-    return superAgent
-      .post(process.env.JIRA_ENDPOINT || `${core.getInput('jira-endpoint')}search/`)
-      .auth(
-        process.env.JIRA_USER || core.getInput('jira-user'),
-        process.env.JIRA_API_TOKEN || core.getInput('jira-api-token'),
-      )
-      .set('Content-Type', 'application/json')
-      .send({ jql: `project = ${jiraProject} AND issue=${jiraIssue}` })
-      .end((err, res) => {
-        if (err || res.statusCode !== 200) {
-          reject(err);
-        } else {
-          resolve(res.body);
-        }
-      });
-  });
-}
-
-function buildJiraInfo(ticket, ticketContents) {
-  let jiraLines = [];
-  ticketContents.issues.forEach(issue => {
-    jiraLines.push(`## [${ticket}](https://vivintsolar.atlassian.net/browse/${ticket})`);
-    issue.fields.fixVersions.forEach(version => {
-      jiraLines.push(`Jira Version: ${version.name}`);
-      // jiraReleaseName = version.releaseDate;
-      // jiraVersionName = version.name;
-    });
-    let descriptionLines;
-    if (issue.fields.description) {
-      descriptionLines = issue.fields.description.split('\r\n');
-    } else {
-      descriptionLines = issue.fields.summary.split('\r\n');
+function validateProjectId(projectId) {
+  if (process.env.PROJECT_ID || core.getInput('valid-jira-project-ids')) {
+    const validIds = core.getInput('valid-jira-project-ids').split(',');
+    if (validIds.includes(projectId)) {
+      return true
     }
-    const newLines = descriptionLines.map(line => {
-      if (line.length !== 0) {
-        if (line.startsWith('[http')) {
-          line = line.replace(/\[/g, '').replace(/\]/, '');
-        }
-        return `> ${line}`;
-      }
-
-      return line;
-    });
-    jiraLines = jiraLines.concat(newLines);
-  });
-
-  jiraLines.push('---');
-  return jiraLines;
+    else throw new Error({
+      name: 'Jira Project Error',
+      message: `Invalid Jira project Id, ${projectId} is not included in valid-jira-project-ids ${core.getInput('valid-jira-project-ids')}`
+    })
+  }
+  return true;
 }
 
-function addJiraLabels(repo, issueNum, pr) {
-  return new Promise((resolve, reject) => {
-    superAgent
-      .put(`${core.getInput('jira-endpoint')}issue/${issueNum}`)
-      .auth(
-        process.env.JIRA_USER || core.getInput('jira-user'),
-        process.env.JIRA_API_TOKEN || core.getInput('jira-api-token'),
-      )
-      .set('Content-Type', 'application/json')
-      .send({ update: { labels: [{ add: repo + ':' + pr }] } })
-      .end((err, res) => {
-        if (err || res.statusCode !== 204) {
-          reject(err);
-        } else {
-          resolve(res);
-        }
-      });
-  });
-}
-
-function updatePRBody(repo, prNumber, newBody) {
-  return octokit.pulls.update({
-    owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
-    repo: repo,
-    pull_number: prNumber,
-    body: newBody,
-  });
+async function findJiraTicket(jiraProject, jiraIssue) {
+  return await jiraClient.issueSearch.searchForIssuesUsingJql({ jql: `project=${jiraProject} AND issue=${jiraIssue}` });
 }
 
 async function getMasterRef(repo, ref) {
   try {
-    const results = await octokit.git.getRef({
+    const results = await octokit.rest.git.getRef({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       ref: ref,
@@ -207,7 +236,7 @@ async function getMasterRef(repo, ref) {
 async function newGitHubStatusBranch(repo, branch, status) {
   try {
     const refObject = await getMasterRef(repo, `heads/${branch}`);
-    const results = await octokit.repos.createCommitStatus({
+    const results = await octokit.rest.repos.createCommitStatus({
       owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
       repo: repo,
       sha: refObject.object.sha,
@@ -224,94 +253,104 @@ async function newGitHubStatusBranch(repo, branch, status) {
   }
 }
 
-async function evalJiraInfoInPR(repo, prNumber, prBody, prTitle, headRef) {
-  let regexTickets = [];
-  let uniqueTickets = [];
-  let ticketMarkers = [];
+async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef) {
   let validatedTickets = false;
-  const bodyLines = prBody.split('\r\n');
 
-  regexTickets = await getAllTickets(repo, prNumber, prTitle, prBody, headRef);
-  uniqueTickets = unique(regexTickets, isEqual);
-  const realTickets = await Promise.all(
-    uniqueTickets.map(async ticket => {
-      try {
-        const [projectId] = ticket.split('-');
-        await getJiraTicket(projectId, ticket);
-
-        return ticket;
-      } catch (err) {
-        return console.log(err.message);
-      }
-    }),
-  );
-  const validTickets = realTickets.filter(ticket => {
-    return ticket !== undefined && !ticket.includes(`PR-${prNumber}`) && ticket.match(jiraRegex);
-  });
+  const regexTickets = await getAllTickets(owner, repo, prNumber, prTitle, prBody, headRef);
+  const uniqueTickets = unique(regexTickets, isEqual);
+  // uniqueTickets = ['DS-3848', 'DS-3884'];
   let errorList = [];
+  let realTickets = await Promise.all(
+    uniqueTickets.map(async ticket => {
+      const [projectId] = ticket.split('-');
+      try {
+        validateProjectId(projectId);
+        const results = await findJiraTicket(projectId, ticket);
+
+        return results.issues[0];
+      } catch (err) {
+        console.log(err.message);
+        errorList.push(err.message);
+        errorList.push(`Error accessing Jira ticket ${ticket}`);
+        if (err.response.status === 400) {
+          errorList.push(`Is Jira project with ID ${projectId} visible for search?`);
+        }
+        await createPrComment(owner, repo, prNumber, `${errorList.join('\r\n')}`);
+        return undefined;
+      }
+    })
+  );
+//  now filter out tickets with issues
+  realTickets = realTickets.filter((ticket) => {
+    return ticket;
+  })
+
+  const validTickets = realTickets.filter(ticket => {
+    return ticket !== undefined && !ticket.key.includes(`PR-${prNumber}`) && ticket.key.match(jiraRegex);
+  });
   const cleanTickets = await Promise.all(
     validTickets.map(async ticket => {
       try {
-        const ticketInfo = await validateJiraRequest(ticket);
+        const ticketInfo = await jiraValidationRequest(ticket);
         validatedTickets = true;
-        return buildJiraInfo(ticket, ticketInfo);
+        return ticketInfo;
       } catch (err) {
         console.log(err);
         let ticketNum = err.match(jiraRegex);
         errorList.push(err);
-        errorList.push('Create a comment with a valid Jira ticket');
-        await newPrComment(repo, prNumber, `${errorList.join('\r\n')}`);
+        errorList.push('Valid Jira ticket needed (edit title, pr body, or add a comment with valid Jira ticket');
+        await createPrComment(owner, repo, prNumber, `${errorList.join('\r\n')}`);
       }
     }),
   );
-  ticketStartIndex = bodyLines.findIndex(line => {
-    return line.match(/Related Jira tickets/g);
-  });
-  endTicketIndex = bodyLines.findIndex(line => {
-    return line.match(/end_jira_tickets/g);
-  });
-  if (ticketStartIndex !== -1 && endTicketIndex !== -1) {
-    bodyLines.splice(ticketStartIndex, endTicketIndex + 1);
-  }
 
-  ticketMarkers.push('## Related Jira tickets');
-  ticketMarkers.push('[end_jira_tickets]:>>>');
-  ticketStartIndex = 0;
-  endTicketIndex = 1;
-
-  bodyLines.splice.apply(bodyLines, [ticketStartIndex, 0].concat(ticketMarkers));
-
-  bodyLines.splice.apply(bodyLines, [ticketStartIndex + 1, 0].concat(cleanTickets.flat()));
   if (realTickets.length === 0) {
-    await newPrComment(repo, prNumber, 'No valid Jira tickets specified! Create a comment with a valid Jira ticket');
+    await createPrComment(owner, repo, prNumber, 'No valid Jira tickets specified! Create a comment with a valid Jira ticket');
   }
+
   if (realTickets.length > 1) {
-    await newPrComment(repo, prNumber, 'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
+    await createPrComment(owner, repo, prNumber, 'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
   }
-  // await Promise.all(uniqueTickets.map(async(ticket) => {
-  //   await addJiraLabels(repo, ticket, prNumber);
-  // }));
-  const reqStatus = {
-    context: core.getInput('jira-required-status') || 'Jira Validation',
-    description: 'Valid Jira ticket specified in PR',
-    state: validatedTickets ? 'success' : 'failure',
-  };
-  await newGitHubStatusBranch(repo, headRef, reqStatus);
-  if (validatedTickets) {
-    const newBody = bodyLines.join('\r\n');
-    await updatePRBody(repo, prNumber, newBody);
+
+  if (process.env.REQUIRED_STATUS === 'true' || core.getInput('jira-required-status')) {
+    const reqStatus = {
+      context: process.env.REQUIRED_STATUS_CONTEXT || core.getInput('jira-required-status'),
+      description: process.env.REQ_STATUS_DESCRIPTION || core.getInput('Valid Jira ticket specified in PR'),
+      state: validatedTickets ? 'success' : 'failure'
+    };
+    await newGitHubStatusBranch(repo, headRef, reqStatus);
   }
 
   return 'PR updated';
 }
 
 (async () => {
+  const stuff = process.env.BLUE_JIRA_AUTH.split(':');
+  const [email, apiToken] = stuff;
   try {
-    // const payload = JSON.stringify(github.context.payload, undefined, 2);
-    // console.log(payload);
+    jiraClient = await new Version2Client({
+      host: process.env.JIRA_HOST || core.getInput('jira-host'), //'https://sunrun.jira.com',
+      authentication: {
+        basic: {
+          email: email,
+          apiToken: apiToken
+        }
+      }
+    });
+    const payload = JSON.stringify(github.context.payload, undefined, 2);
+    console.log(payload);
+
+    let repoName = '';
+    let repoOwner = '';
+    let prNumber = '';
+    let prBody = '';
+    let prTitle = '';
+    let pr = {};
+    let headRef = '';
 
     if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
       repoName = github.context.payload.repository.name;
+      repoOwner = github.context.payload.repository_owner;
       prNumber = github.context.payload.issue.number;
       prBody = github.context.payload.issue.body;
       prTitle = github.context.payload.issue.title;
@@ -323,17 +362,19 @@ async function evalJiraInfoInPR(repo, prNumber, prBody, prTitle, headRef) {
       headRef = pr.data.head.ref;
     } else {
       repoName = github.context.payload.repository.name;
+      repoOwner = github.context.payload.repository_owner;
       prNumber = github.context.payload.pull_request.number;
       prBody = github.context.payload.pull_request.body;
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref;
     }
 
-    await evalJiraInfoInPR(repoName, prNumber, prBody, prTitle, headRef);
+    await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 
     // const res = await evalJiraInfoInPR(
+    //   'vivintsolar',
     //   'gh-build-tools',
-    //   '48',
+    //   52,
     //   //'## Related Jira tickets\r\n## [CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\r\n> Convert 1 early adopter repo over to ghActions\r\n---\n\r\n\r\n\r\n<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\r\n\r\n## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\r\n\r\n- [ ] Rebased on the latest master (`git pull --rebase origin master`)\r\n- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\r\n- [ ] Atomic commits\r\n- [ ] Tests adjusted to address changes\r\n- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\r\n  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\r\n- [ ] Version commit added (if applicable)\r\n- [ ] Documentation\r\n  - [ ] [Release, Test, Device plans](./solar/) updated\r\n- [ ] Reviewed by author\r\n- [ ] Ready for review\r\n\r\n[currentUnitTestCount]: 7\r\n[currentIntegrationTestCount]: 3',
     //   '[CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\n' +
     //     '\n' +
@@ -353,9 +394,9 @@ async function evalJiraInfoInPR(repo, prNumber, prBody, prTitle, headRef) {
     //     '- [ ] Reviewed by author\n' +
     //     '- [ ] Ready for review',
     //   'fix: update template add missing tags',
-    //   'badge_server_endpoint',
+    //   'deploy_test',
     // );
-    console.log(`event = ${github.context.payload.action}`);
+    // console.log(`event = ${github.context.payload.action}`);
     // console.log(`pr base label = ${github.context.payload.pull_request.base.label}`);
   } catch (error) {
     core.setFailed(error.message);

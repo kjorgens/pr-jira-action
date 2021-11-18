@@ -3,6 +3,7 @@
   "version": "1.1.0",
   "description": "This action pulls the jira description from the pr and places the jira description in the PR body.",
   "main": "pr-jira.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "ncc build pr-jira.js -o dist"
@@ -10,10 +11,15 @@
   "dependencies": {
     "@actions/core": "^1.6.0",
     "@actions/github": "^5.0.0",
+    "@octokit/graphql": "^4.8.0",
+    "@types/node": "10.17.27",
+    "jira.js": "^2.7.0",
     "@vercel/ncc": "^0.31.1",
     "lodash.uniqwith": "^4.5.0",
     "lodash.isequal": "^4.5.0",
-    "superagent": "^6.1.0"
+    "superagent": "^6.1.0",
+    "ts-node": "^9.0.0",
+    "typescript": "~3.9.7"
   },
   "keywords": [],
   "author": "",
