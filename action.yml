@@ -16,6 +16,9 @@ inputs:
   jira-api-token:
     description: Jira api token
     required: true
+  valid-jira-project-ids:
+    description: valid project ids
+    required: false
   jira-required-status:
     description: Context for Jira Validation github required status
     required: false

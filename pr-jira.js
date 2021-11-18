@@ -201,6 +201,20 @@ async function jiraValidationRequest(jiraIssue) {
   });
 }
 
+function validateProjectId(projectId) {
+  if (process.env.PROJECT_ID || core.getInput('valid-jira-project-ids')) {
+    const validIds = core.getInput('valid-jira-project-ids').split(',');
+    if (validIds.includes(projectId)) {
+      return true
+    }
+    else throw new Error({
+      name: 'Jira Project Error',
+      message: `Invalid Jira project Id, ${projectId} is not included in valid-jira-project-ids ${core.getInput('valid-jira-project-ids')}`
+    })
+  }
+  return true;
+}
+
 async function findJiraTicket(jiraProject, jiraIssue) {
   return await jiraClient.issueSearch.searchForIssuesUsingJql({ jql: `project=${jiraProject} AND issue=${jiraIssue}` });
 }
@@ -250,6 +264,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     uniqueTickets.map(async ticket => {
       const [projectId] = ticket.split('-');
       try {
+        validateProjectId(projectId);
         const results = await findJiraTicket(projectId, ticket);
 
         return results.issues[0];
