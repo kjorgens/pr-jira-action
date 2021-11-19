@@ -7,7 +7,7 @@ const core = require('@actions/core');
 const actionGhPkg = require('@actions/github');
 // const { getOctokit } = actionGhPkg;
 // import ghpkg from '@octokit/graphql';
-const ghpkg = require('@octokit/graphql');
+// const ghpkg = require('@octokit/graphql');
 // const { graphql } = ghpkg;
 const jiraRegex = new RegExp(/((?!([A-Z0-9a-z]{1,10})-?$)[A-Z]{1}[A-Z0-9]+-\d+)/g);
 const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
@@ -86,7 +86,7 @@ const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
 }`;
 
 async function createPrComment(owner, repo, prNum, commentBodyText) {
-  const prInfo = await ghpkg.graphql(getPRIdQuery, {
+  const prInfo = await octokit.graphql(getPRIdQuery, {
     prNumber: prNum,
     owner: owner,
     repo: repo,
@@ -95,7 +95,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
     }
   });
 
-  return await ghpkg.graphql(createCommentMutation, {
+  return await octokit.graphql(createCommentMutation, {
     prId: prInfo.repository.pullRequest.id,
     commentBody: commentBodyText,
     owner: owner,
@@ -134,7 +134,7 @@ async function getAllTickets(owner, repo, prNumber) {
   } else {
     ghToken = `token ${core.getInput('github_token')}`;
   }
-  const prData = await ghpkg.graphql(
+  const prData = await octokit.graphql(
     allTicketsQuery, {
       prNumber: prNumber,
       owner: owner,
@@ -145,7 +145,7 @@ async function getAllTickets(owner, repo, prNumber) {
     }
   );
 
-  const prComments = await ghpkg.graphql(
+  const prComments = await octokit.graphql(
     prCommentsQuery, {
       owner: owner,
       repo: repo,
@@ -392,8 +392,8 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
 
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 
-    // testMode = true;
-    //
+    testMode = true;
+
     // const res = await evalJiraInfoInPR(
     //   'vivintsolar',
     //   'gh-build-tools',
