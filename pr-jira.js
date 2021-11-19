@@ -369,26 +369,21 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     let pr = {};
     let headRef;
 
-    if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
+    // if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
+    //   repoName = github.context.payload.repository.name;
+    //   repoOwner = github.context.payload.organization.login;
+    //   prNumber = github.context.payload.issue.number;
+    //   prBody = github.context.payload.issue.body;
+    //   prTitle = github.context.payload.issue.title;
+    //   headRef = pr.data.head.ref;
+    // } else {
       repoName = github.context.payload.repository.name;
-      repoOwner = github.context.payload.repository_owner;
-      prNumber = github.context.payload.issue.number;
-      prBody = github.context.payload.issue.body;
-      prTitle = github.context.payload.issue.title;
-      pr = await octokit.pulls.get({
-        owner: core.getInput('repo-owner'),
-        repo: repoName,
-        pull_number: prNumber,
-      });
-      headRef = pr.data.head.ref;
-    } else {
-      repoName = github.context.payload.repository.name;
-      repoOwner = github.context.payload.repository_owner;
+      repoOwner = github.context.payload.organization.login;
       prNumber = github.context.payload.pull_request.number;
       prBody = github.context.payload.pull_request.body;
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref;
-    }
+    // }
 
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 

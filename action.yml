@@ -4,9 +4,6 @@ inputs:
   github-token:
     description: github access token
     required: true
-  repo-owner:
-    description: repo owner name
-    required: true
   jira-host:
     description: Your organiztion Jira host address
     required: true
