@@ -358,8 +358,8 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
         }
       }
     });
-    // const payload = JSON.stringify(github.context.payload, undefined, 2);
-    // console.log(payload);
+    const payload = JSON.stringify(github.context.payload, undefined, 2);
+    console.log(payload);
 
     let repoName;
     let repoOwner;
