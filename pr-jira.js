@@ -1,14 +1,19 @@
-import jpkg from 'jira.js';
-const { Version2Client } = jpkg;
-import * as core from '@actions/core';
-import actionGhPkg from '@actions/github';
-const { getOctokit } = actionGhPkg;
-import ghpkg from '@octokit/graphql';
-const { graphql } = ghpkg;
+// import jpkg from 'jira.js';
+const jpkg = require('jira.js');
+// const { Version2Client } = jpkg;
+// import * as core from '@actions/core';
+const core = require('@actions/core');
+// import actionGhPkg from '@actions/github';
+const actionGhPkg = require('@actions/github');
+// const { getOctokit } = actionGhPkg;
+// import ghpkg from '@octokit/graphql';
+const ghpkg = require('@octokit/graphql');
+// const { graphql } = ghpkg;
 const jiraRegex = new RegExp(/((?!([A-Z0-9a-z]{1,10})-?$)[A-Z]{1}[A-Z0-9]+-\d+)/g);
 const ticketPattern = new RegExp('([A-Z]+-[0-9]+)', 'g');
-import unique from 'lodash.uniqwith';
-import isEqual from 'lodash.isequal';
+// import { uniq, isEqual } from 'lodash';
+const unique = require('lodash.uniqwith');
+const isEqual = require('lodash.isequal');
 
 let testMode = false;
 const searchBranch = process.env.SEARCH_BRANCH || false;
@@ -16,7 +21,7 @@ const searchPrBody = process.env.SEARCH_BODY || false;
 const searchTitle = process.env.SEARCH_TITLE || false;
 const searchComments = process.env.SEARCH_COMMENTS || false;
 
-const octokit = getOctokit(process.env.GH_TOKEN || core.getInput('github_token'));
+const octokit = actionGhPkg.getOctokit(process.env.GH_TOKEN || core.getInput('github_token'));
 
 let jiraClient = {};
 
@@ -81,22 +86,22 @@ const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
 }`;
 
 async function createPrComment(owner, repo, prNum, commentBodyText) {
-  const prInfo = await graphql(getPRIdQuery, {
+  const prInfo = await ghpkg.graphql(getPRIdQuery, {
     prNumber: prNum,
     owner: owner,
     repo: repo,
     headers: {
-      authorization: process.env.GH_TOKEN || `token ${core.getInput('github_token')}`
+      authorization: `token ${process.env.GH_TOKEN || core.getInput('github_token')}`
     }
   });
 
-  return await graphql(createCommentMutation, {
+  return await ghpkg.graphql(createCommentMutation, {
     prId: prInfo.repository.pullRequest.id,
     commentBody: commentBodyText,
     owner: owner,
     repo: repo,
     headers: {
-      authorization:  process.env.GH_TOKEN || `token ${core.getInput('github_token')}`
+      authorization: `token ${process.env.GH_TOKEN || core.getInput('github_token')}`
     }
   });
 }
@@ -123,13 +128,13 @@ function removeDuplicates(tickets) {
 async function getAllTickets(owner, repo, prNumber) {
   let ticketsFound = [];
 
-  let ghToken = '';
+  let ghToken;
   if (process.env.GH_TOKEN) {
     ghToken = `token ${process.env.GH_TOKEN}`;
   } else {
     ghToken = `token ${core.getInput('github_token')}`;
   }
-  const prData = await graphql(
+  const prData = await ghpkg.graphql(
     allTicketsQuery, {
       prNumber: prNumber,
       owner: owner,
@@ -140,7 +145,7 @@ async function getAllTickets(owner, repo, prNumber) {
     }
   );
 
-  const prComments = await graphql(
+  const prComments = await ghpkg.graphql(
     prCommentsQuery, {
       owner: owner,
       repo: repo,
@@ -186,8 +191,8 @@ async function getAllTickets(owner, repo, prNumber) {
 
 async function jiraValidationRequest(jiraIssue) {
   return new Promise(async(resolve, reject) => {
-    var [projectId, ticket] = jiraIssue.key.split('-');
-    var qstring = {
+    let [projectId, ticket] = jiraIssue.key.split('-');
+    let qstring = {
       jql: `project=${projectId} AND issue=${jiraIssue.key}`,
     };
 
@@ -214,12 +219,12 @@ async function jiraValidationRequest(jiraIssue) {
 }
 
 function validateProjectId(projectId) {
-  if (core.getInput && core.getInput('valid-jira-project-ids') || process.env.PROJECT_ID) {
-    const validIds = core.getInput && core.getInput('valid-jira-project-ids').split(',') || process.env.PROJECT_ID.split(',');
-    if (validIds.includes(projectId)) {
+  if (process.env.PROJECT_IDS || core.getInput('valid-jira-project-ids')) {
+    const validIds = process.env.PROJECT_IDS || core.getInput && core.getInput('valid-jira-project-ids');
+    if (validIds.split(',').includes(projectId)) {
       return true
     }
-    throw new Error( `Invalid Jira project Id, ${projectId} is not included in valid-jira-project-ids ${core.getInput && core.getInput('valid-jira-project-ids') || process.env.PROJECT_ID}`);
+    throw new Error( `Invalid Jira project Id, ${projectId} is not included in valid-jira-project-ids ${core.getInput && core.getInput('valid-jira-project-ids') || process.env.PROJECT_IDS}`);
   }
   return true;
 }
@@ -273,7 +278,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     uniqueTickets.map(async ticket => {
       const [projectId] = ticket.split('-');
       try {
-        validateProjectId('DESP');
+        validateProjectId(projectId);
         const results = await findJiraTicket(projectId, ticket);
 
         return results.issues[0];
@@ -297,7 +302,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
   const validTickets = realTickets.filter(ticket => {
     return ticket !== undefined && !ticket.key.includes(`PR-${prNumber}`) && ticket.key.match(jiraRegex);
   });
-  const cleanTickets = await Promise.all(
+  await Promise.all(
     validTickets.map(async ticket => {
       try {
         const ticketInfo = await jiraValidationRequest(ticket);
@@ -312,7 +317,6 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
       }
     }),
   );
-
   if (realTickets.length === 0) {
     await createPrComment(owner, repo, prNumber, 'No valid Jira tickets specified! Create a comment with a valid Jira ticket');
   }
@@ -334,7 +338,6 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
 }
 
 (async () => {
-
   let tokenValue = '';
   if (process.env.BLUE_JIRA_AUTH || core.getInput && core.getInput('jira-auth')) {
     if (core.getInput && core.getInput('jira-auth')) {
@@ -346,7 +349,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
 
   const [email, apiToken] = tokenValue.split(':');
   try {
-    jiraClient = await new Version2Client({
+    jiraClient = await new jpkg.Version2Client({
       host: process.env.JIRA_HOST || core.getInput && core.getInput('jira-host'), //'https://sunrun.jira.com',
       authentication: {
         basic: {
@@ -358,64 +361,64 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     // const payload = JSON.stringify(github.context.payload, undefined, 2);
     // console.log(payload);
 
-    let repoName = '';
-    let repoOwner = '';
-    let prNumber = '';
-    let prBody = '';
-    let prTitle = '';
+    let repoName;
+    let repoOwner;
+    let prNumber;
+    let prBody;
+    let prTitle;
     let pr = {};
-    let headRef = '';
+    let headRef;
 
-    // if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
-    //   repoName = github.context.payload.repository.name;
-    //   repoOwner = github.context.payload.repository_owner;
-    //   prNumber = github.context.payload.issue.number;
-    //   prBody = github.context.payload.issue.body;
-    //   prTitle = github.context.payload.issue.title;
-    //   pr = await octokit.pulls.get({
-    //     owner: core.getInput('repo-owner'),
-    //     repo: repoName,
-    //     pull_number: prNumber,
-    //   });
-    //   headRef = pr.data.head.ref;
-    // } else {
-    //   repoName = github.context.payload.repository.name;
-    //   repoOwner = github.context.payload.repository_owner;
-    //   prNumber = github.context.payload.pull_request.number;
-    //   prBody = github.context.payload.pull_request.body;
-    //   prTitle = github.context.payload.pull_request.title;
-    //   headRef = github.context.payload.pull_request.head.ref;
-    // }
+    if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
+      repoName = github.context.payload.repository.name;
+      repoOwner = github.context.payload.repository_owner;
+      prNumber = github.context.payload.issue.number;
+      prBody = github.context.payload.issue.body;
+      prTitle = github.context.payload.issue.title;
+      pr = await octokit.pulls.get({
+        owner: core.getInput('repo-owner'),
+        repo: repoName,
+        pull_number: prNumber,
+      });
+      headRef = pr.data.head.ref;
+    } else {
+      repoName = github.context.payload.repository.name;
+      repoOwner = github.context.payload.repository_owner;
+      prNumber = github.context.payload.pull_request.number;
+      prBody = github.context.payload.pull_request.body;
+      prTitle = github.context.payload.pull_request.title;
+      headRef = github.context.payload.pull_request.head.ref;
+    }
+
+    await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
+
+    // testMode = true;
     //
-    // await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
-
-    testMode = true;
-
-    const res = await evalJiraInfoInPR(
-      'vivintsolar',
-      'gh-build-tools',
-      52,
-      //'## Related Jira tickets\r\n## [CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\r\n> Convert 1 early adopter repo over to ghActions\r\n---\n\r\n\r\n\r\n<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\r\n\r\n## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\r\n\r\n- [ ] Rebased on the latest master (`git pull --rebase origin master`)\r\n- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\r\n- [ ] Atomic commits\r\n- [ ] Tests adjusted to address changes\r\n- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\r\n  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\r\n- [ ] Version commit added (if applicable)\r\n- [ ] Documentation\r\n  - [ ] [Release, Test, Device plans](./solar/) updated\r\n- [ ] Reviewed by author\r\n- [ ] Ready for review\r\n\r\n[currentUnitTestCount]: 7\r\n[currentIntegrationTestCount]: 3',
-      '[CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\n' +
-        '\n' +
-        '<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\n' +
-        '\n' +
-        '## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\n' +
-        '\n' +
-        '- [ ] Rebased on the latest master (`git pull --rebase origin master`)\n' +
-        '- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\n' +
-        '- [ ] Atomic commits\n' +
-        '- [ ] Tests adjusted to address changes\n' +
-        '- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\n' +
-        '  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\n' +
-        '- [ ] Version commit added (if applicable)\n' +
-        '- [ ] Documentation\n' +
-        '  - [ ] [Release, Test, Device plans](./solar/) updated\n' +
-        '- [ ] Reviewed by author\n' +
-        '- [ ] Ready for review',
-      'fix: update template add missing tags',
-      'deploy_test',
-    );
+    // const res = await evalJiraInfoInPR(
+    //   'vivintsolar',
+    //   'gh-build-tools',
+    //   52,
+    //   //'## Related Jira tickets\r\n## [CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\r\n> Convert 1 early adopter repo over to ghActions\r\n---\n\r\n\r\n\r\n<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\r\n\r\n## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\r\n\r\n- [ ] Rebased on the latest master (`git pull --rebase origin master`)\r\n- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\r\n- [ ] Atomic commits\r\n- [ ] Tests adjusted to address changes\r\n- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\r\n  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\r\n- [ ] Version commit added (if applicable)\r\n- [ ] Documentation\r\n  - [ ] [Release, Test, Device plans](./solar/) updated\r\n- [ ] Reviewed by author\r\n- [ ] Ready for review\r\n\r\n[currentUnitTestCount]: 7\r\n[currentIntegrationTestCount]: 3',
+    //   '[CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\n' +
+    //     '\n' +
+    //     '<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\n' +
+    //     '\n' +
+    //     '## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\n' +
+    //     '\n' +
+    //     '- [ ] Rebased on the latest master (`git pull --rebase origin master`)\n' +
+    //     '- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\n' +
+    //     '- [ ] Atomic commits\n' +
+    //     '- [ ] Tests adjusted to address changes\n' +
+    //     '- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\n' +
+    //     '  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\n' +
+    //     '- [ ] Version commit added (if applicable)\n' +
+    //     '- [ ] Documentation\n' +
+    //     '  - [ ] [Release, Test, Device plans](./solar/) updated\n' +
+    //     '- [ ] Reviewed by author\n' +
+    //     '- [ ] Ready for review',
+    //   'fix: update template add missing tags',
+    //   'deploy_test',
+    // );
     // console.log(`event = ${github.context.payload.action}`);
     // console.log(`pr base label = ${github.context.payload.pull_request.base.label}`);
   } catch (error) {
