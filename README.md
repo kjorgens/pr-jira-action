@@ -19,7 +19,7 @@ If more than one Jira ticket is specified, a reminder comment is created.
  _repo-owner:_
 
     GitHub organization name   
- _github_token:_
+ _github-token:_
 
     secrets.GITHUB_TOKEN or a GitHub personal access token.
  _jira-required-status:_

@@ -74816,7 +74816,7 @@ const searchPrBody = process.env.SEARCH_BODY || false;
 const searchTitle = process.env.SEARCH_TITLE || false;
 const searchComments = process.env.SEARCH_COMMENTS || false;
 
-const octokit = actionGhPkg.getOctokit(process.env.GH_TOKEN || core.getInput('github_token'));
+const octokit = actionGhPkg.getOctokit(process.env.GH_TOKEN || core.getInput('github-token'));
 
 let jiraClient = {};
 
@@ -74886,7 +74886,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
     owner: owner,
     repo: repo,
     headers: {
-      authorization: `token ${process.env.GH_TOKEN || core.getInput('github_token')}`
+      authorization: `token ${process.env.GH_TOKEN || core.getInput('github-token')}`
     }
   });
 
@@ -74896,7 +74896,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
     owner: owner,
     repo: repo,
     headers: {
-      authorization: `token ${process.env.GH_TOKEN || core.getInput('github_token')}`
+      authorization: `token ${process.env.GH_TOKEN || core.getInput('github-token')}`
     }
   });
 }
@@ -74927,7 +74927,7 @@ async function getAllTickets(owner, repo, prNumber) {
   if (process.env.GH_TOKEN) {
     ghToken = `token ${process.env.GH_TOKEN}`;
   } else {
-    ghToken = `token ${core.getInput('github_token')}`;
+    ghToken = `token ${core.getInput('github-token')}`;
   }
   const prData = await octokit.graphql(
     allTicketsQuery, {
