@@ -3,9 +3,9 @@ const jpkg = require('jira.js');
 // const { Version2Client } = jpkg;
 // import * as core from '@actions/core';
 const core = require('@actions/core');
-// import actionGhPkg from '@actions/github';
-const actionGhPkg = require('@actions/github');
-// const { getOctokit } = actionGhPkg;
+// import github from '@actions/github';
+const github = require('@actions/github');
+// const { getOctokit } = github;
 // import ghpkg from '@octokit/graphql';
 // const ghpkg = require('@octokit/graphql');
 // const { graphql } = ghpkg;
@@ -21,7 +21,7 @@ const searchPrBody = process.env.SEARCH_BODY || false;
 const searchTitle = process.env.SEARCH_TITLE || false;
 const searchComments = process.env.SEARCH_COMMENTS || false;
 
-const octokit = actionGhPkg.getOctokit(process.env.GH_TOKEN || core.getInput('github-token'));
+const octokit = github.getOctokit(process.env.GH_TOKEN || core.getInput('github-token'));
 
 let jiraClient = {};
 
