@@ -76,8 +76,7 @@ jobs:
           jira-endpoint: https://<your jira org>.jira.com
           repo-owner: orgname
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          jira-user: ${{ secrets.JIRA_USER }}
-          jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
+          jira-auth: ${{ secrets.JIRA_USER_TOKEN }}
           jira-required-status: Jira Validation
           ticket-search-branch: true
           ticket-search-title: true
