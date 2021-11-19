@@ -1,7 +1,7 @@
 name: 'PR Jira'
 description: 'Integrate Jira and Github pull requests'
 inputs:
-  github_token:
+  github-token:
     description: github access token
     required: true
   repo-owner:
@@ -10,14 +10,11 @@ inputs:
   jira-host:
     description: Your organiztion Jira host address
     required: true
-  jira-user:
-    description: Jira user name
-    required: true
-  jira-api-token:
-    description: Jira api token
+  jira-auth:
+    description: Jira auth in the form useremail:apitoken
     required: true
   valid-jira-project-ids:
-    description: valid project ids
+    description: valid project ids, comma seperated
     required: false
   jira-required-status:
     description: Context for Jira Validation github required status
