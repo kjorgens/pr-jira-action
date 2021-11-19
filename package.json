@@ -2,11 +2,11 @@
   "name": "pr-jira-integration",
   "version": "1.1.0",
   "description": "This action pulls the jira description from the pr and places the jira description in the PR body.",
-  "main": "pr-jira.js",
+  "main": "pr-jira.mjs",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "compile": "ncc build pr-jira.js -o dist"
+    "compile": "ncc build pr-jira.mjs -o dist"
   },
   "dependencies": {
     "@actions/core": "^1.6.0",
