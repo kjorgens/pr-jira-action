@@ -233,10 +233,10 @@ async function findJiraTicket(jiraProject, jiraIssue) {
   return await jiraClient.issueSearch.searchForIssuesUsingJql({ jql: `project=${jiraProject} AND issue=${jiraIssue}` });
 }
 
-async function getMasterRef(repo, ref) {
+async function getMasterRef(owner, repo, ref) {
   try {
     const results = await octokit.rest.git.getRef({
-      owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
+      owner: owner,
       repo: repo,
       ref: ref,
     });
@@ -247,11 +247,11 @@ async function getMasterRef(repo, ref) {
   }
 }
 
-async function newGitHubStatusBranch(repo, branch, status) {
+async function newGitHubStatusBranch(owner, repo, branch, status) {
   try {
-    const refObject = await getMasterRef(repo, `heads/${branch}`);
+    const refObject = await getMasterRef(owner, repo, `heads/${branch}`);
     const results = await octokit.rest.repos.createCommitStatus({
-      owner: process.env.GITHUB_ORG || core.getInput('repo-owner'),
+      owner: owner,
       repo: repo,
       sha: refObject.object.sha,
       state: status.state,
@@ -310,7 +310,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
         return ticketInfo;
       } catch (err) {
         console.log(err);
-        let ticketNum = err.match(jiraRegex);
+        // let ticketNum = err.match(jiraRegex);
         errorList.push(err);
         errorList.push('Valid Jira ticket needed (edit title, pr body, or add a comment with valid Jira ticket');
         await createPrComment(owner, repo, prNumber, `${errorList.join('\r\n')}`);
@@ -331,7 +331,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
       description: core.getInput('Valid Jira ticket specified in PR') || process.env.REQ_STATUS_DESCRIPTION,
       state: validatedTickets ? 'success' : 'failure'
     };
-    await newGitHubStatusBranch(repo, headRef, reqStatus);
+    await newGitHubStatusBranch(owner, repo, headRef, reqStatus);
   }
 
   return 'PR updated';
@@ -358,8 +358,8 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
         }
       }
     });
-    const payload = JSON.stringify(github.context.payload, undefined, 2);
-    console.log(payload);
+    // const payload = JSON.stringify(github.context.payload, undefined, 2);
+    // console.log(payload);
 
     let repoName;
     let repoOwner;
@@ -369,27 +369,23 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     let pr = {};
     let headRef;
 
-    if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
+    // if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
+    //   repoName = github.context.payload.repository.name;
+    //   repoOwner = github.context.payload.organization.login;
+    //   prNumber = github.context.payload.issue.number;
+    //   prBody = github.context.payload.issue.body;
+    //   prTitle = github.context.payload.issue.title;
+    //   headRef = pr.data.head.ref;
+    // } else {
       repoName = github.context.payload.repository.name;
-      repoOwner = github.context.payload.repository_owner;
-      prNumber = github.context.payload.issue.number;
-      prBody = github.context.payload.issue.body;
-      prTitle = github.context.payload.issue.title;
-      pr = await octokit.pulls.get({
-        owner: core.getInput('repo-owner'),
-        repo: repoName,
-        pull_number: prNumber,
-      });
-      headRef = pr.data.head.ref;
-    } else {
-      repoName = github.context.payload.repository.name;
-      repoOwner = github.context.payload.repository_owner;
+      repoOwner = github.context.payload.organization.login;
       prNumber = github.context.payload.pull_request.number;
       prBody = github.context.payload.pull_request.body;
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref;
-    }
+    // }
 
+    console.log(`${repoName} ${repoOwner} ${headRef}`);
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 
     testMode = true;
