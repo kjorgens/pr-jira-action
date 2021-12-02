@@ -6,8 +6,6 @@ This action integrates Jira with Github pull requests.
 
 GitHub Action to integrate Jira tickets with GitHub pull requests. Checks pull request for valid Jira tickets. If a ticket does not exist or is done or closed, a comment is created on the pull request.
 ![Screenshot](./img/invalid_ticket.png)
-Listens for pull request comments that contain a Jira ticket. Adds link and Jira ticket description to the pull request body.
-![Screenshot](./img/pr_body_jira.png)
 Sets GitHub status to indicate specified Jira tickets are valid.
 ![Screenshot](./img/jira_valid_status.png)
 If more than one Jira ticket is specified, a reminder comment is created.
