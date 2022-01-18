@@ -385,7 +385,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     // } else {
       repoName = github.context.payload.repository.name;
       repoOwner = github.context.payload.organization.login;
-      prNumber = github.context.payload.pull_request.number;
+      prNumber = github.context.payload.pull_request.number || github.context.payload.issue.number;
       prBody = github.context.payload.pull_request.body;
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref;
