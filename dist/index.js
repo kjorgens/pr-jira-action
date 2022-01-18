@@ -74824,11 +74824,9 @@ const allTicketsQuery = `query($repo: String!, $prNumber: Int!, $owner: String!)
   repository(owner: $owner, name: $repo) {
     name
     pullRequest(number: $prNumber){
-      headRef {
-        name
-      }
+      id
       title
-      bodyText
+      body
       headRef {
         name
       }
@@ -74857,20 +74855,6 @@ const prCommentsQuery = `query($repo: String!, $prNumber: Int!, $owner: String!,
   }
 }`;
 
-const getPRIdQuery = `query($repo: String!, $prNumber: Int!, $owner: String!) {
-  repository(owner: $owner, name: $repo) {
-    name
-    pullRequest(number: $prNumber) {
-      id
-      body
-      title
-      headRef {
-        name
-      }  
-    }
-  }
-}`;
-
 const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
   addComment(input:{subjectId: $prId, body: $commentBody}) {
     commentEdge {
@@ -74886,7 +74870,7 @@ const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
 }`;
 
 async function getPrStuff(owner, repo, prNum) {
-  const prInfo = await octokit.graphql(getPRIdQuery, {
+  const prInfo = await octokit.graphql(allTicketsQuery, {
     prNumber: prNum,
     owner: owner,
     repo: repo,
@@ -74899,7 +74883,7 @@ async function getPrStuff(owner, repo, prNum) {
 }
 
 async function createPrComment(owner, repo, prNum, commentBodyText) {
-  const prInfo = await octokit.graphql(getPRIdQuery, {
+  const prInfo = await octokit.graphql(allTicketsQuery, {
     prNumber: prNum,
     owner: owner,
     repo: repo,
@@ -74909,7 +74893,7 @@ async function createPrComment(owner, repo, prNum, commentBodyText) {
   });
 
   return await octokit.graphql(createCommentMutation, {
-    prId: prInfo.repository.pullRequest.id,
+    prId: prInfo.id,
     commentBody: commentBodyText,
     owner: owner,
     repo: repo,
@@ -74971,21 +74955,21 @@ async function getAllTickets(owner, repo, prNumber) {
   );
 
   if (core.getInput && core.getInput('ticket-search-title') || searchTitle === 'true') {
-    let prTickets = prData.repository.pullRequest.title.toUpperCase().match(ticketPattern);
+    let prTickets = prData.title.toUpperCase().match(ticketPattern);
     if (prTickets) {
       console.log('ticket found in pr title');
       ticketsFound = ticketsFound.concat(prTickets);
     }
   }
   if (core.getInput && core.getInput('ticket-search-pr-body') || searchPrBody === 'true') {
-    let bodyTickets = prData.repository.pullRequest.bodyText.toUpperCase().match(ticketPattern);
+    let bodyTickets = prData.body.toUpperCase().match(ticketPattern);
     if (bodyTickets) {
       console.log('ticket found in pr body');
       ticketsFound = ticketsFound.concat(bodyTickets);
     }
   }
   if (core.getInput && core.getInput('ticket-search-branch') || searchBranch === 'true') {
-    let branchTickets = prData.repository.pullRequest.headRef.name.toUpperCase().match(ticketPattern);
+    let branchTickets = prData.headRef.name.toUpperCase().match(ticketPattern);
     if (branchTickets) {
       console.log('ticket found in pr branch name');
       ticketsFound = ticketsFound.concat(branchTickets);
@@ -75203,7 +75187,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
       headRef = prData.headRef.name;
     }
 
-    console.log(`${repoName} ${repoOwner} ${headRef}`);
+    // console.log(`${repoName} ${repoOwner} ${headRef}`);
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 
     // testMode = true;
