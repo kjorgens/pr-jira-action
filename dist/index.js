@@ -74862,6 +74862,11 @@ const getPRIdQuery = `query($repo: String!, $prNumber: Int!, $owner: String!) {
     name
     pullRequest(number: $prNumber) {
       id
+      body
+      title
+      headRef {
+        name
+      }  
     }
   }
 }`;
@@ -74879,6 +74884,19 @@ const createCommentMutation = `mutation($prId: ID!, $commentBody: String!) {
     }
   }
 }`;
+
+async function getPrStuff(owner, repo, prNum) {
+  const prInfo = await octokit.graphql(getPRIdQuery, {
+    prNumber: prNum,
+    owner: owner,
+    repo: repo,
+    headers: {
+      authorization: `token ${process.env.GH_TOKEN || core.getInput('github-token')}`
+    }
+  });
+
+  return prInfo.repository.pullRequest;
+}
 
 async function createPrComment(owner, repo, prNum, commentBodyText) {
   const prInfo = await octokit.graphql(getPRIdQuery, {
@@ -75114,6 +75132,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
       }
     }),
   );
+
   if (realTickets.length === 0) {
     await createPrComment(owner, repo, prNumber, 'No valid Jira tickets specified!');
     core.setFailed('No valid Jira tickets specified!');
@@ -75167,57 +75186,27 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
     let prNumber;
     let prBody;
     let prTitle;
-    let pr = {};
     let headRef;
 
-    // if (github.context.payload.action === 'created' && github.context.payload.comment !== undefined) {
-    //   repoName = github.context.payload.repository.name;
-    //   repoOwner = github.context.payload.organization.login;
-    //   prNumber = github.context.payload.issue.number;
-    //   prBody = github.context.payload.issue.body;
-    //   prTitle = github.context.payload.issue.title;
-    //   headRef = pr.data.head.ref;
-    // } else {
-      repoName = github.context.payload.repository.name;
-      repoOwner = github.context.payload.organization.login;
-      prNumber = github.context.payload.pull_request.number || github.context.payload.issue.number;
+    repoName = github.context.payload.repository.name;
+    repoOwner = github.context.payload.organization.login;
+    if (github.context.payload.pull_request) {
       prBody = github.context.payload.pull_request.body;
       prTitle = github.context.payload.pull_request.title;
-      headRef = github.context.payload.pull_request.head.ref;
-    // }
+      headRef = github.context.payload.pull_request.head.ref
+      prNumber = github.context.payload.pull_request.number;
+    } else if (github.context.payload.issue.number) {
+      prNumber = github.context.payload.issue.number;
+      prData = getPrStuff(repoOwner, repoName, prNumber);
+      prBody = prData.body;
+      prTitle = prData.title;
+      headRef = prData.headRef.name;
+    }
 
     console.log(`${repoName} ${repoOwner} ${headRef}`);
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
 
-    testMode = true;
-
-    // const res = await evalJiraInfoInPR(
-    //   'vivintsolar',
-    //   'gh-build-tools',
-    //   52,
-    //   //'## Related Jira tickets\r\n## [CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\r\n> Convert 1 early adopter repo over to ghActions\r\n---\n\r\n\r\n\r\n<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\r\n\r\n## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\r\n\r\n- [ ] Rebased on the latest master (`git pull --rebase origin master`)\r\n- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\r\n- [ ] Atomic commits\r\n- [ ] Tests adjusted to address changes\r\n- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\r\n  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\r\n- [ ] Version commit added (if applicable)\r\n- [ ] Documentation\r\n  - [ ] [Release, Test, Device plans](./solar/) updated\r\n- [ ] Reviewed by author\r\n- [ ] Ready for review\r\n\r\n[currentUnitTestCount]: 7\r\n[currentIntegrationTestCount]: 3',
-    //   '[CIE-1139](https://vivintsolar.atlassian.net/browse/CIE-1139)\n' +
-    //     '\n' +
-    //     '<!---[![Start Tests](https://devdash.vivintsolar.com/api/badges/TestingBadge.svg?badgeAction=updateBadge&badgeText=Start%20build&status=Jenkins&color=orange)](https://devdash.vivintsolar.com/api/auth/okta?redirect_to=https://devdash.vivintsolar.com/api/executeJenkinsJob?jenkinsJob=gh-build-tools&jenkinsURL=https://build2.vivintsolar.com/job/gh-build-tools/job/-PR-TBD-/)--->\n' +
-    //     '\n' +
-    //     '## Checklist ([review](https://vivintsolar.atlassian.net/wiki/spaces/HE/pages/616693761/Git+Commit+Standards) and check all)\n' +
-    //     '\n' +
-    //     '- [ ] Rebased on the latest master (`git pull --rebase origin master`)\n' +
-    //     '- [ ] Commit messages follow [standards](https://kb.vstg.io/best-practices/git)\n' +
-    //     '- [ ] Atomic commits\n' +
-    //     '- [ ] Tests adjusted to address changes\n' +
-    //     '- [ ] Analytic events added/updated following the [conventions](../analytics/readme.md)\n' +
-    //     '  - [ ] Verified in the [HEA-Development](https://analytics.amplitude.com/vslr/activity) lane\n' +
-    //     '- [ ] Version commit added (if applicable)\n' +
-    //     '- [ ] Documentation\n' +
-    //     '  - [ ] [Release, Test, Device plans](./solar/) updated\n' +
-    //     '- [ ] Reviewed by author\n' +
-    //     '- [ ] Ready for review',
-    //   'fix: update template add missing tags',
-    //   'deploy_test',
-    // );
-    // console.log(`event = ${github.context.payload.action}`);
-    // console.log(`pr base label = ${github.context.payload.pull_request.base.label}`);
+    // testMode = true;
   } catch (error) {
     core.setFailed(error.message);
   }
