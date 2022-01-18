@@ -88,14 +88,7 @@ async function getPrStuff(owner, repo, prNum) {
 }
 
 async function createPrComment(owner, repo, prNum, commentBodyText) {
-  const prInfo = await octokit.graphql(allTicketsQuery, {
-    prNumber: prNum,
-    owner: owner,
-    repo: repo,
-    headers: {
-      authorization: `token ${process.env.GH_TOKEN || core.getInput('github-token')}`
-    }
-  });
+  const prInfo = await getPrStuff(owner, repo, prNum);
 
   return await octokit.graphql(createCommentMutation, {
     prId: prInfo.id,
@@ -136,16 +129,7 @@ async function getAllTickets(owner, repo, prNumber) {
   } else {
     ghToken = `token ${core.getInput('github-token')}`;
   }
-  const prData = await octokit.graphql(
-    allTicketsQuery, {
-      prNumber: prNumber,
-      owner: owner,
-      repo: repo,
-      headers: {
-        authorization:  ghToken
-      }
-    }
-  );
+  const prData = await getPrStuff(owner, repo, prNumber);
 
   const prComments = await octokit.graphql(
     prCommentsQuery, {
