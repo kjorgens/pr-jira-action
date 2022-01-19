@@ -75103,12 +75103,14 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
 
   if (realTickets.length === 0) {
     await createPrComment(owner, repo, prNumber, 'No valid Jira tickets specified!');
+    core.setOutput("Error Message", "No valid Jira tickets specified!");
     core.setFailed('No valid Jira tickets specified!');
     process.exit(1);
   }
 
   if (realTickets.length > 1) {
     await createPrComment(owner, repo, prNumber, 'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
+    core.setOutput("Error Message", "More than 1 Jira ticket specified, divide the work between 2 pull requests?");
     core.setFailed('More than 1 Jira ticket specified, divide the work between 2 pull requests?');
     process.exit(1);
   }
@@ -75180,6 +75182,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     // testMode = true;
   } catch (error) {
     core.setFailed(error.message);
+    core.setOutput("Error Message", error.message);
   }
 })();
 
