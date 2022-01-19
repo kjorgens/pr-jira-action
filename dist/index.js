@@ -74882,11 +74882,11 @@ async function getPrStuff(owner, repo, prNum) {
   return prInfo.repository.pullRequest;
 }
 
-async function createPrComment(owner, repo, prNum, commentBodyText) {
-  const prInfo = await getPrStuff(owner, repo, prNum);
+async function createPrComment(owner, repo, prNum, prId, commentBodyText) {
+  // const prInfo = await getPrStuff(owner, repo, prNum);
 
   return await octokit.graphql(createCommentMutation, {
-    prId: prInfo.id,
+    prId: prId,
     commentBody: commentBodyText,
     owner: owner,
     repo: repo,
@@ -74915,7 +74915,7 @@ function removeDuplicates(tickets) {
   });
 }
 
-async function getAllTickets(owner, repo, prNumber) {
+async function getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef ) {
   let ticketsFound = [];
 
   let ghToken;
@@ -74924,7 +74924,7 @@ async function getAllTickets(owner, repo, prNumber) {
   } else {
     ghToken = `token ${core.getInput('github-token')}`;
   }
-  const prData = await getPrStuff(owner, repo, prNumber);
+  // const prData = await getPrStuff(owner, repo, prNumber);
 
   const prComments = await octokit.graphql(
     prCommentsQuery, {
@@ -74939,21 +74939,21 @@ async function getAllTickets(owner, repo, prNumber) {
   );
 
   if (core.getInput && core.getInput('ticket-search-title') || searchTitle === 'true') {
-    let prTickets = prData.title.toUpperCase().match(ticketPattern);
+    let prTickets = prTitle.toUpperCase().match(ticketPattern);
     if (prTickets) {
       console.log('ticket found in pr title');
       ticketsFound = ticketsFound.concat(prTickets);
     }
   }
   if (core.getInput && core.getInput('ticket-search-pr-body') || searchPrBody === 'true') {
-    let bodyTickets = prData.body.toUpperCase().match(ticketPattern);
+    let bodyTickets = prBody.toUpperCase().match(ticketPattern);
     if (bodyTickets) {
       console.log('ticket found in pr body');
       ticketsFound = ticketsFound.concat(bodyTickets);
     }
   }
   if (core.getInput && core.getInput('ticket-search-branch') || searchBranch === 'true') {
-    let branchTickets = prData.headRef.name.toUpperCase().match(ticketPattern);
+    let branchTickets = headRef.toUpperCase().match(ticketPattern);
     if (branchTickets) {
       console.log('ticket found in pr branch name');
       ticketsFound = ticketsFound.concat(branchTickets);
@@ -75048,10 +75048,10 @@ async function newGitHubStatusBranch(owner, repo, branch, status) {
   }
 }
 
-async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef) {
+async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef, prId) {
   let validatedTickets = false;
 
-  const regexTickets = await getAllTickets(owner, repo, prNumber, prTitle, prBody, headRef);
+  const regexTickets = await getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef, prId);
   const uniqueTickets = unique(regexTickets, isEqual);
   // uniqueTickets = ['DS-3848', 'DS-3884'];
   let errorList = [];
@@ -75070,7 +75070,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
         if (err.response && err.response.status === 400) {
           errorList.push(`Is Jira project with ID ${projectId} visible for search?`);
         }
-        await createPrComment(owner, repo, prNumber, `${errorList.join('\r\n')}`);
+        await createPrComment(owner, repo, prNumber, prId,`${errorList.join('\r\n')}`);
         return undefined;
       }
     })
@@ -75169,6 +75169,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef)
       prBody = prData.body;
       prTitle = prData.title;
       headRef = prData.headRef.name;
+      prId = prData.id
     }
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
