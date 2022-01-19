@@ -74963,7 +74963,6 @@ async function getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef) {
   }
   if (core.getInput && core.getInput('ticket-search-comments') || searchComments === 'true') {
     if (prComments.repository.pullRequest.comments) {
-      console.log('ticket found in pr comment');
       let commentTickets = getPrTickets(prComments.repository.pullRequest.comments.edges);
       ticketsFound = ticketsFound.concat(commentTickets);
     }
