@@ -74946,10 +74946,12 @@ async function getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef) {
     }
   }
   if (core.getInput && core.getInput('ticket-search-pr-body') || searchPrBody === 'true') {
-    let bodyTickets = prBody.toUpperCase().match(ticketPattern);
-    if (bodyTickets) {
-      console.log('ticket found in pr body');
-      ticketsFound = ticketsFound.concat(bodyTickets);
+    if (prBody) {
+      let bodyTickets = prBody.toUpperCase().match(ticketPattern);
+      if (bodyTickets) {
+        console.log('ticket found in pr body');
+        ticketsFound = ticketsFound.concat(bodyTickets);
+      }
     }
   }
   if (core.getInput && core.getInput('ticket-search-branch') || searchBranch === 'true') {
