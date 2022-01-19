@@ -301,7 +301,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
         // let ticketNum = err.match(jiraRegex);
         errorList.push(err);
         errorList.push('Valid Jira ticket needed (edit title, pr body, or add a comment with valid Jira ticket');
-        await createPrComment(owner, repo, prNumber, `${errorList.join('\r\n')}`);
+        await createPrComment(owner, repo, prNumber, prId,`${errorList.join('\r\n')}`);
         core.setFailed(errorList.join('\r\n'));
         process.exit(1);
       }
@@ -309,14 +309,14 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
   );
 
   if (realTickets.length === 0) {
-    await createPrComment(owner, repo, prNumber, 'No valid Jira tickets specified!');
+    await createPrComment(owner, repo, prNumber, prId,'No valid Jira tickets specified!');
     core.setOutput("ERROR_MESSAGE", "No valid Jira tickets specified!");
     core.setFailed('No valid Jira tickets specified!');
     process.exit(1);
   }
 
   if (realTickets.length > 1) {
-    await createPrComment(owner, repo, prNumber, 'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
+    await createPrComment(owner, repo, prNumber, prId,'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
     core.setOutput("ERROR_MESSAGE", "More than 1 Jira ticket specified, divide the work between 2 pull requests?");
     core.setFailed('More than 1 Jira ticket specified, divide the work between 2 pull requests?');
     process.exit(1);
