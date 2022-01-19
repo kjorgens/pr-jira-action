@@ -75163,6 +75163,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref
       prNumber = github.context.payload.pull_request.number;
+      prId = github.context.payload.pull_request.id;
     } else if (github.context.payload.issue.number) {
       prNumber = github.context.payload.issue.number;
       prData = getPrStuff(repoOwner, repoName, prNumber);
@@ -75173,7 +75174,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     }
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
-    await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef);
+    await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef, prId);
 
     // testMode = true;
   } catch (error) {
