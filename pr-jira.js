@@ -120,7 +120,7 @@ function removeDuplicates(tickets) {
   });
 }
 
-async function getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef ) {
+async function getAllTickets(owner, repo, prNumber, prBody, prTitle, headRef) {
   let ticketsFound = [];
 
   let ghToken;
@@ -368,10 +368,11 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
       prTitle = github.context.payload.pull_request.title;
       headRef = github.context.payload.pull_request.head.ref
       prNumber = github.context.payload.pull_request.number;
-      prId = github.context.payload.pull_request.id;
+      prId = github.context.payload.pull_request.node_id;
     } else if (github.context.payload.issue.number) {
       prNumber = github.context.payload.issue.number;
       prData = getPrStuff(repoOwner, repoName, prNumber);
+      prData = await getPrStuff("vivintsolar", "github-actions-testing", 84);
       prBody = prData.body;
       prTitle = prData.title;
       headRef = prData.headRef.name;
