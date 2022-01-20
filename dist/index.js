@@ -75177,6 +75177,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     }
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
+    core.setOutput("TESTING_MESSAGE", "setting this value before");
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef, prId);
     core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
     // testMode = true;
