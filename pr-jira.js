@@ -375,7 +375,6 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     } else if (github.context.payload.issue.number) {
       prNumber = github.context.payload.issue.number;
       prData = getPrStuff(repoOwner, repoName, prNumber);
-      prData = await getPrStuff("vivintsolar", "github-actions-testing", 84);
       prBody = prData.body;
       prTitle = prData.title;
       headRef = prData.headRef.name;
