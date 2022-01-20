@@ -384,7 +384,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef, prId);
-
+    core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
     // testMode = true;
   } catch (error) {
     core.setFailed(error.message);
