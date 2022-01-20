@@ -29,6 +29,12 @@ inputs:
     description: Search for Jira tickets in comments
     required: false
 
+outputs:
+  ERROR_MESSAGE:
+    description: error message
+  TESTING_MESSAGE:
+    description: test message
+
 runs:
   using: 'node12'
   main: 'dist/index.js'
