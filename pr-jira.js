@@ -388,5 +388,6 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
   } catch (error) {
     core.setFailed(error.message);
     core.setOutput("ERROR_MESSAGE", error.message);
+    core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
   }
 })();
