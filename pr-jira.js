@@ -309,14 +309,14 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
 
   if (realTickets.length === 0) {
     await createPrComment(owner, repo, prNumber, prId,'No valid Jira tickets specified!');
-    core.setOutput("ERROR_MESSAGE", "No valid Jira tickets specified!");
+    core.setOutput('ERROR_MESSAGE', 'No valid Jira tickets specified!');
     core.setFailed('No valid Jira tickets specified!');
     process.exit(1);
   }
 
   if (realTickets.length > 1) {
     await createPrComment(owner, repo, prNumber, prId,'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
-    core.setOutput("ERROR_MESSAGE", "More than 1 Jira ticket specified, divide the work between 2 pull requests?");
+    core.setOutput('ERROR_MESSAGE', 'More than 1 Jira ticket specified, divide the work between 2 pull requests?');
     core.setFailed('More than 1 Jira ticket specified, divide the work between 2 pull requests?');
     process.exit(1);
   }
@@ -382,13 +382,13 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     }
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
-    core.setOutput("TESTING_MESSAGE", "setting this value before");
+    core.setOutput('TESTING_MESSAGE', 'setting this value before');
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef, prId);
-    core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
+    core.setOutput('TESTING_MESSAGE', 'did we find the output we were looking for?');
     // testMode = true;
   } catch (error) {
     core.setFailed(error.message);
-    core.setOutput("ERROR_MESSAGE", error.message);
-    core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
+    core.setOutput('ERROR_MESSAGE', error.message);
+    core.setOutput('TESTING_MESSAGE', 'did we find the output we were looking for?');
   }
 })();
