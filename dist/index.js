@@ -75062,7 +75062,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
       try {
         validateProjectId(projectId);
         const results = await findJiraTicket(projectId, ticket);
-
+        core.setOutput('JIRA_TICKET_NUMBER', results.issues[0])
         return results.issues[0];
       } catch (err) {
         console.log(err.message);
