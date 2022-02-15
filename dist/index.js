@@ -75062,7 +75062,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
       try {
         validateProjectId(projectId);
         const results = await findJiraTicket(projectId, ticket);
-
+        core.setOutput('JIRA_TICKET_NUMBER', results.issues[0])
         return results.issues[0];
       } catch (err) {
         console.log(err.message);
@@ -75169,7 +75169,7 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
       prId = github.context.payload.pull_request.node_id;
     } else if (github.context.payload.issue.number) {
       prNumber = github.context.payload.issue.number;
-      prData = getPrStuff(repoOwner, repoName, prNumber);
+      prData = await getPrStuff(repoOwner, repoName, prNumber);
       prBody = prData.body;
       prTitle = prData.title;
       headRef = prData.headRef.name;
@@ -75177,14 +75177,12 @@ async function evalJiraInfoInPR(owner, repo, prNumber, prBody, prTitle, headRef,
     }
 
     // console.log(`${repoName} ${repoOwner} ${headRef}`);
-    core.setOutput('TESTING_MESSAGE', 'setting this value before');
     await evalJiraInfoInPR(repoOwner, repoName, prNumber, prBody, prTitle, headRef, prId);
-    core.setOutput('TESTING_MESSAGE', 'did we find the output we were looking for?');
+    core.setOutput("TESTING_MESSAGE", "did we find the output we were looking for?");
     // testMode = true;
   } catch (error) {
     core.setFailed(error.message);
-    core.setOutput('ERROR_MESSAGE', error.message);
-    core.setOutput('TESTING_MESSAGE', 'did we find the output we were looking for?');
+    core.setOutput("ERROR_MESSAGE", error.message);
   }
 })();
 

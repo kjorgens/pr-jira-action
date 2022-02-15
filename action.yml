@@ -30,6 +30,8 @@ inputs:
     required: false
 
 outputs:
+  JIRA_TICKET_NUMBER:
+    description: jira ticket number that was found
   ERROR_MESSAGE:
     description: error message
   TESTING_MESSAGE:
